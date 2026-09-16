@@ -15,6 +15,31 @@ The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
 [`docs/superpowers/specs/2026-09-16-crawl-ecommerce-platform-design.md`](docs/superpowers/specs/2026-09-16-crawl-ecommerce-platform-design.md).
 
+### Product-extraction enrichment pipeline
+
+Two additional services enrich each Facebook Ads crawl with structured
+product data extracted from the ad's destination page:
+
+- **crawl4ai-service** — a Python HTTP service (Crawl4AI) that fetches a URL
+  and converts the page to Markdown.
+- **product-extractor-service** — a RabbitMQ worker that consumes the
+  `crawl.completed.fbads` event, crawls each ad's `link_url` via
+  `crawl4ai-service`, asks an OpenRouter-hosted LLM to extract structured
+  product fields (name, price, currency, SKU, etc.) from the page Markdown,
+  and persists the results to the `products` table.
+
+This pipeline runs automatically — there is no separate trigger. Any
+`POST /jobs/fbads` job that completes crawling will kick it off in the
+background. Per-URL crawl/extraction failures are tolerated and logged (a
+destination link may not be a product page), so a job with zero enriched
+products is not necessarily a bug.
+
+To inspect the extracted products for a given job:
+
+```sql
+SELECT * FROM products WHERE job_id = '<job-id>';
+```
+
 ## API
 
 Two crawl paths are exposed by `api-gateway`:

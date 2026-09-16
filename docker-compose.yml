@@ -85,6 +85,28 @@ services:
     ports:
       - "8082:8082"
 
+  crawl4ai-service:
+    build:
+      context: ./crawl4ai-service
+    restart: on-failure:5
+
+  product-extractor-service:
+    build:
+      context: .
+      dockerfile: cmd/product-extractor-service/Dockerfile
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      crawl4ai-service:
+        condition: service_started
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .
