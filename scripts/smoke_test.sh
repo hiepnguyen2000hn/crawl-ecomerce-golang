@@ -3,10 +3,15 @@
 set -euo pipefail
 
 KEYWORD="golang"
+PATH_TYPE="trend"
 while [ $# -gt 0 ]; do
   case "$1" in
     --keyword)
       KEYWORD="$2"
+      shift 2
+      ;;
+    --path)
+      PATH_TYPE="$2"
       shift 2
       ;;
     *)
@@ -16,17 +21,32 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-JOB_ID=$(curl -sf -X POST http://localhost:8888/jobs/trend \
+case "$PATH_TYPE" in
+  trend)
+    ENDPOINT="jobs/trend"
+    BODY="{\"keyword\":\"${KEYWORD}\"}"
+    ;;
+  fbads)
+    ENDPOINT="jobs/fbads"
+    BODY="{\"query\":\"${KEYWORD}\",\"country\":\"US\"}"
+    ;;
+  *)
+    echo "Unknown --path: $PATH_TYPE (expected 'trend' or 'fbads')" >&2
+    exit 1
+    ;;
+esac
+
+JOB_ID=$(curl -sf -X POST http://localhost:8888/${ENDPOINT} \
   -H 'Content-Type: application/json' \
-  -d "{\"keyword\":\"${KEYWORD}\"}" | jq -r .job_id)
+  -d "${BODY}" | jq -r .job_id)
 
 echo "Created job: $JOB_ID"
 
 for i in $(seq 1 30); do
-  STATUS=$(curl -sf http://localhost:8888/jobs/trend/$JOB_ID | jq -r .status)
+  STATUS=$(curl -sf http://localhost:8888/${ENDPOINT}/$JOB_ID | jq -r .status)
   echo "Status: $STATUS"
   if [ "$STATUS" = "done" ]; then
-    curl -sf http://localhost:8888/jobs/trend/$JOB_ID | jq .
+    curl -sf http://localhost:8888/${ENDPOINT}/$JOB_ID | jq .
     exit 0
   fi
   if [ "$STATUS" = "failed" ]; then

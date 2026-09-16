@@ -1,17 +1,26 @@
 # crawl-ecomerce-golang
 
-A small e-commerce trend-crawling platform built as three Go microservices:
+A small e-commerce trend-crawling platform built as four Go microservices:
 
 - **trend-service** — a gRPC service backed by a RabbitMQ worker that fetches
   Google Trends data via SerpApi and persists it.
-- **ai-service** — a RabbitMQ worker that takes the crawled trend data and
-  asks an OpenRouter-hosted LLM to summarize the key insight.
-- **api-gateway** — a REST API (go-zero) that lets clients create trend jobs
-  and poll their status/results.
+- **fb-ads-service** — a gRPC service backed by a RabbitMQ worker that fetches
+  Facebook Ads Library data via Apify and persists it.
+- **ai-service** — a RabbitMQ worker that takes the crawled trend or fbads
+  data and asks an OpenRouter-hosted LLM to summarize the key insight.
+- **api-gateway** — a REST API (go-zero) that lets clients create trend or
+  fbads jobs and poll their status/results.
 
 The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
 [`docs/superpowers/specs/2026-09-16-crawl-ecommerce-platform-design.md`](docs/superpowers/specs/2026-09-16-crawl-ecommerce-platform-design.md).
+
+## API
+
+Two crawl paths are exposed by `api-gateway`:
+
+- `POST /jobs/trend` — `{"keyword": "golang"}` — `GET /jobs/trend/{id}`
+- `POST /jobs/fbads` — `{"query": "nike", "country": "US"}` — `GET /jobs/fbads/{id}`
 
 ## Prerequisites
 
@@ -30,13 +39,16 @@ Edit `.env` and set:
 ```
 SERPAPI_API_KEY=your-serpapi-key
 OPENROUTER_API_KEY=your-openrouter-key
+APIFY_API_TOKEN=your-apify-token
 ```
 
-Get a SerpApi key from [serpapi.com](https://serpapi.com) and an OpenRouter
-key from [openrouter.ai](https://openrouter.ai). Docker Compose automatically
-loads `.env` from the repo root and uses it to fill in the
-`SERPAPI_API_KEY`/`OPENROUTER_API_KEY` environment variables passed into the
-`trend-service` and `ai-service` containers.
+Get a SerpApi key from [serpapi.com](https://serpapi.com), an OpenRouter key
+from [openrouter.ai](https://openrouter.ai), and an Apify token from
+[apify.com](https://apify.com). Docker Compose automatically loads `.env`
+from the repo root and uses it to fill in the
+`SERPAPI_API_KEY`/`OPENROUTER_API_KEY`/`APIFY_API_TOKEN` environment
+variables passed into the `trend-service`, `ai-service`, and
+`fb-ads-service` containers.
 
 ## Run
 
@@ -60,6 +72,13 @@ completes or fails. Pass `--keyword` to use a different keyword:
 
 ```sh
 ./scripts/smoke_test.sh --keyword "sneakers"
+```
+
+Pass `--path fbads` to exercise the Facebook Ads Library crawl path instead
+(the `--keyword` value is sent as the `query` field):
+
+```sh
+./scripts/smoke_test.sh --path fbads --keyword "nike"
 ```
 
 ### Local dev note
