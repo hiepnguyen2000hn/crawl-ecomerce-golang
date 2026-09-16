@@ -68,9 +68,6 @@ func (c *HTTPClient) FetchTrend(ctx context.Context, keyword string) (TrendResul
 		return TrendResult{}, fmt.Errorf("serpapi: returned status %d", resp.StatusCode)
 	}
 
-	raw, err := json.Marshal(json.RawMessage(nil))
-	_ = raw
-
 	var body serpApiResponse
 	bodyBytes, err := readAndDecode(resp, &body)
 	if err != nil {
