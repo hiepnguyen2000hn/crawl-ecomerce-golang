@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS ai_results;
+DROP TABLE IF EXISTS trend_raw;
+DROP TABLE IF EXISTS jobs;
