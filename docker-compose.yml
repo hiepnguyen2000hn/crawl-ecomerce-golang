@@ -17,5 +17,38 @@ services:
       - "5673:5672"
       - "15673:15672"
 
+  trend-service:
+    build:
+      context: .
+      dockerfile: cmd/trend-service/Dockerfile
+    environment:
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8081:8081"
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: cmd/ai-service/Dockerfile
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: cmd/api-gateway/Dockerfile
+    depends_on:
+      - postgres
+      - rabbitmq
+      - trend-service
+    ports:
+      - "8888:8888"
+
 volumes:
   pgdata:

@@ -1,0 +1,10 @@
+Name: trend-service
+ListenOn: 0.0.0.0:8081
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+SerpApi:
+  ApiKey: ${SERPAPI_API_KEY}
+  BaseURL: https://serpapi.com

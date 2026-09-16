@@ -1,0 +1,10 @@
+Name: gateway-api
+Host: 0.0.0.0
+Port: 8888
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+TrendRpc:
+  Target: trend-service:8081
