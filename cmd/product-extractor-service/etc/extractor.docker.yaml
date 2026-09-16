@@ -1,0 +1,11 @@
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+OpenRouter:
+  ApiKey: ${OPENROUTER_API_KEY}
+  Model: nvidia/nemotron-3-super-120b-a12b:free
+  BaseURL: https://openrouter.ai/api/v1
+Crawl4ai:
+  BaseURL: http://crawl4ai-service:8000

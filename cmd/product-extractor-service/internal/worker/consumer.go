@@ -1,0 +1,147 @@
+package worker
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/aiproviders"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/crawl4ai"
+)
+
+type CompletedMessage struct {
+	JobID string `json:"job_id"`
+}
+
+const productSchemaJSON = `{
+  "type": "object",
+  "properties": {
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_name": {"type": "string"},
+          "price": {"type": "number"},
+          "currency": {"type": "string"},
+          "sku": {"type": "string"}
+        },
+        "required": ["product_name", "price", "currency", "sku"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["products"],
+  "additionalProperties": false
+}`
+
+type extractedProduct struct {
+	ProductName string  `json:"product_name"`
+	Price       float64 `json:"price"`
+	Currency    string  `json:"currency"`
+	SKU         string  `json:"sku"`
+}
+
+type extractedProducts struct {
+	Products []extractedProduct `json:"products"`
+}
+
+// Consumer reads crawl.completed.fbads events (the same event ai-service
+// consumes) and, for each distinct link_url in the job's crawled ads,
+// crawls the destination page and extracts product info via structured
+// AI output. It never modifies jobs.status — that belongs to ai-service.
+// Per-URL failures (crawl or extraction) are logged and skipped; they
+// never fail the whole message, since one broken destination link should
+// not block extraction for the job's other URLs.
+type Consumer struct {
+	DB       *sql.DB
+	Crawler  crawl4ai.Client
+	Provider aiproviders.Provider
+}
+
+func (c *Consumer) HandleMessage(body []byte) error {
+	var msg CompletedMessage
+	if err := json.Unmarshal(body, &msg); err != nil {
+		return fmt.Errorf("worker: unmarshal completed message: %w", err)
+	}
+
+	ctx := context.Background()
+
+	rows, err := c.DB.QueryContext(ctx,
+		`SELECT DISTINCT link_url, (array_agg(id))[1] FROM fbads_raw WHERE job_id = $1 AND link_url IS NOT NULL AND link_url != '' GROUP BY link_url`,
+		msg.JobID,
+	)
+	if err != nil {
+		return fmt.Errorf("worker: load distinct link_urls: %w", err)
+	}
+
+	type urlAd struct {
+		URL  string
+		AdID string
+	}
+	var urls []urlAd
+	for rows.Next() {
+		var u urlAd
+		if err := rows.Scan(&u.URL, &u.AdID); err != nil {
+			rows.Close()
+			return fmt.Errorf("worker: scan link_url row: %w", err)
+		}
+		urls = append(urls, u)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("worker: iterate link_url rows: %w", err)
+	}
+
+	for _, u := range urls {
+		c.extractOne(ctx, msg.JobID, u.AdID, u.URL)
+	}
+	return nil
+}
+
+// extractOne handles a single URL's crawl+extract+save. Any failure is
+// logged and swallowed — see the Consumer doc comment on why this never
+// returns an error to HandleMessage's caller.
+func (c *Consumer) extractOne(ctx context.Context, jobID, adID, url string) {
+	crawlResult, err := c.Crawler.Crawl(ctx, url)
+	if err != nil {
+		fmt.Println("worker: crawl4ai request failed for", url, ":", err)
+		return
+	}
+	if !crawlResult.Success {
+		fmt.Println("worker: crawl4ai reported failure for", url, ":", crawlResult.Error)
+		return
+	}
+	if crawlResult.Markdown == "" {
+		fmt.Println("worker: crawl4ai returned empty markdown for", url)
+		return
+	}
+
+	prompt := fmt.Sprintf("Extract every distinct product mentioned on this page, with its name, price, currency, and SKU if present. If no SKU is given, invent a short stable one from the product name. Page content (Markdown):\n%s", crawlResult.Markdown)
+	raw, err := c.Provider.CompleteJSON(ctx, prompt, "product_extraction", []byte(productSchemaJSON))
+	if err != nil {
+		fmt.Println("worker: AI extraction failed for", url, ":", err)
+		return
+	}
+
+	var extracted extractedProducts
+	if err := json.Unmarshal(raw, &extracted); err != nil {
+		fmt.Println("worker: failed to parse extracted products for", url, ":", err)
+		return
+	}
+
+	for _, p := range extracted.Products {
+		productJSON, err := json.Marshal(p)
+		if err != nil {
+			fmt.Println("worker: failed to marshal product for storage:", err)
+			continue
+		}
+		if _, err := c.DB.ExecContext(ctx,
+			`INSERT INTO products (job_id, ad_id, url, product_name, price, currency, sku, raw) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			jobID, adID, url, p.ProductName, p.Price, p.Currency, p.SKU, productJSON,
+		); err != nil {
+			fmt.Println("worker: failed to insert product for", url, ":", err)
+		}
+	}
+}
