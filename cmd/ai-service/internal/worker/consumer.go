@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/aiproviders"
 )
@@ -28,12 +29,9 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 	ctx := context.Background()
 
-	var trendData []byte
-	err := c.DB.QueryRowContext(ctx,
-		`SELECT trend_data FROM trend_raw WHERE job_id = $1 ORDER BY fetched_at DESC LIMIT 1`, msg.JobID,
-	).Scan(&trendData)
-	if err != nil {
-		return fmt.Errorf("worker: load trend_raw: %w", err)
+	var jobType string
+	if err := c.DB.QueryRowContext(ctx, `SELECT type FROM jobs WHERE id = $1`, msg.JobID).Scan(&jobType); err != nil {
+		return fmt.Errorf("worker: load job type: %w", err)
 	}
 
 	if _, err := c.DB.ExecContext(ctx,
@@ -42,7 +40,47 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: mark ai_processing: %w", err)
 	}
 
-	prompt := fmt.Sprintf("Analyze this Google Trends data and summarize the key insight in 2-3 sentences:\n%s", string(trendData))
+	var prompt string
+	switch jobType {
+	case "trend":
+		var trendData []byte
+		if err := c.DB.QueryRowContext(ctx,
+			`SELECT trend_data FROM trend_raw WHERE job_id = $1 ORDER BY fetched_at DESC LIMIT 1`, msg.JobID,
+		).Scan(&trendData); err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: load trend_raw: %w", err)
+		}
+		prompt = fmt.Sprintf("Analyze this Google Trends data and summarize the key insight in 2-3 sentences:\n%s", string(trendData))
+	case "fbads":
+		rows, err := c.DB.QueryContext(ctx,
+			`SELECT title, body FROM fbads_raw WHERE job_id = $1 ORDER BY fetched_at ASC`, msg.JobID)
+		if err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: load fbads_raw: %w", err)
+		}
+		var sb strings.Builder
+		count := 0
+		for rows.Next() {
+			var title, body string
+			if err := rows.Scan(&title, &body); err != nil {
+				rows.Close()
+				c.markFailed(ctx, msg.JobID)
+				return fmt.Errorf("worker: scan fbads_raw: %w", err)
+			}
+			fmt.Fprintf(&sb, "Ad %d — Title: %s\nBody: %s\n\n", count+1, title, body)
+			count++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: iterate fbads_raw: %w", err)
+		}
+		prompt = fmt.Sprintf("Analyze these %d Facebook ad creatives and summarize the common patterns, messaging themes, and calls to action in 3-4 sentences:\n%s", count, sb.String())
+	default:
+		c.markFailed(ctx, msg.JobID)
+		return fmt.Errorf("worker: unknown job type %q", jobType)
+	}
+
 	result, err := c.Provider.Complete(ctx, prompt)
 	if err != nil {
 		c.markFailed(ctx, msg.JobID)

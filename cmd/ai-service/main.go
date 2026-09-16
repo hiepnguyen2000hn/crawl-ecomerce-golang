@@ -55,10 +55,27 @@ func main() {
 		panic(err)
 	}
 
+	fbadsConsumer, err := rabbitmq.NewConsumer(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})
+	if err != nil {
+		panic(err)
+	}
+
 	w := &worker.Consumer{DB: conn, Provider: provider}
 	fmt.Println("Starting ai-service consumer...")
-	if err := consumer.Consume(context.Background(), "ai.trend.completed", "crawl.completed.trend", w.HandleMessage); err != nil {
-		fmt.Fprintln(os.Stderr, "ai-service consumer stopped:", err)
-		os.Exit(1)
-	}
+
+	go func() {
+		if err := consumer.Consume(context.Background(), "ai.trend.completed", "crawl.completed.trend", w.HandleMessage); err != nil {
+			fmt.Fprintln(os.Stderr, "ai-service trend consumer stopped:", err)
+			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		if err := fbadsConsumer.Consume(context.Background(), "ai.fbads.completed", "crawl.completed.fbads", w.HandleMessage); err != nil {
+			fmt.Fprintln(os.Stderr, "ai-service fbads consumer stopped:", err)
+			os.Exit(1)
+		}
+	}()
+
+	select {}
 }
