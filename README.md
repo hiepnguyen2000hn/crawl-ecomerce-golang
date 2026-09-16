@@ -75,10 +75,13 @@ completes or fails. Pass `--keyword` to use a different keyword:
 ```
 
 Pass `--path fbads` to exercise the Facebook Ads Library crawl path instead
-(the `--keyword` value is sent as the `query` field):
+(the `--keyword` value is sent as the `query` field). Pass `--country` to
+override the default `US` (accepts any Apify-supported ISO country code, or
+`ALL`):
 
 ```sh
 ./scripts/smoke_test.sh --path fbads --keyword "nike"
+./scripts/smoke_test.sh --path fbads --keyword "áo" --country "VN"
 ```
 
 ### Local dev note

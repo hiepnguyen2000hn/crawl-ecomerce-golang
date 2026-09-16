@@ -126,6 +126,7 @@ func (c *Consumer) Consume(ctx context.Context, queue, routingKey string, handle
 				return fmt.Errorf("rabbitmq: delivery channel closed")
 			}
 			if err := handler(d.Body); err != nil {
+				fmt.Println("rabbitmq: handler error, nacking to DLQ:", err)
 				_ = d.Nack(false, false)
 				continue
 			}

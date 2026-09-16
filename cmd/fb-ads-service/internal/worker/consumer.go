@@ -72,7 +72,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		if _, err := c.DB.ExecContext(ctx,
 			`INSERT INTO fbads_raw (job_id, ad_archive_id, page_id, page_name, is_active, start_date, end_date, body, title, cta_text, cta_type, link_url, raw)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			msg.JobID, ad.AdArchiveID, ad.PageID, ad.PageName, ad.IsActive, ad.StartDate, ad.EndDate, ad.Body, ad.Title, ad.CtaText, ad.CtaType, ad.LinkURL, ad.Raw,
+			msg.JobID, ad.AdArchiveID, ad.PageID, ad.PageName, ad.IsActive, nullableTime(ad.StartDate), nullableTime(ad.EndDate), ad.Body, ad.Title, ad.CtaText, ad.CtaType, ad.LinkURL, ad.Raw,
 		); err != nil {
 			c.markFailed(ctx, msg.JobID)
 			return fmt.Errorf("worker: insert fbads_raw: %w", err)
@@ -94,6 +94,15 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: publish completed event: %w", err)
 	}
 	return nil
+}
+
+// nullableTime converts a zero time.Time (apify.Ad's representation of an
+// unknown/missing date) into a SQL NULL instead of storing the 1970 epoch.
+func nullableTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
 }
 
 // markFailed best-effort sets jobs.status = 'failed' for the given job. Any

@@ -4,6 +4,7 @@ set -euo pipefail
 
 KEYWORD="golang"
 PATH_TYPE="trend"
+COUNTRY="US"
 while [ $# -gt 0 ]; do
   case "$1" in
     --keyword)
@@ -12,6 +13,10 @@ while [ $# -gt 0 ]; do
       ;;
     --path)
       PATH_TYPE="$2"
+      shift 2
+      ;;
+    --country)
+      COUNTRY="$2"
       shift 2
       ;;
     *)
@@ -28,7 +33,7 @@ case "$PATH_TYPE" in
     ;;
   fbads)
     ENDPOINT="jobs/fbads"
-    BODY="{\"query\":\"${KEYWORD}\",\"country\":\"US\"}"
+    BODY="{\"query\":\"${KEYWORD}\",\"country\":\"${COUNTRY}\"}"
     ;;
   *)
     echo "Unknown --path: $PATH_TYPE (expected 'trend' or 'fbads')" >&2

@@ -100,8 +100,8 @@ type apifyAdItem struct {
 	PageID      string        `json:"page_id"`
 	PageName    string        `json:"page_name"`
 	IsActive    bool          `json:"is_active"`
-	StartDate   int64         `json:"start_date"`
-	EndDate     int64         `json:"end_date"`
+	StartDate   *int64        `json:"start_date"`
+	EndDate     *int64        `json:"end_date"`
 	Snapshot    apifySnapshot `json:"snapshot"`
 }
 
@@ -145,7 +145,7 @@ func (c *HTTPClient) FetchAds(ctx context.Context, params AdParams) (AdsResult, 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return AdsResult{}, fmt.Errorf("apify: returned status %d", resp.StatusCode)
 	}
 
@@ -161,8 +161,8 @@ func (c *HTTPClient) FetchAds(ctx context.Context, params AdParams) (AdsResult, 
 			PageID:      it.PageID,
 			PageName:    it.PageName,
 			IsActive:    it.IsActive,
-			StartDate:   time.Unix(it.StartDate, 0).UTC(),
-			EndDate:     time.Unix(it.EndDate, 0).UTC(),
+			StartDate:   unixPtrToTime(it.StartDate),
+			EndDate:     unixPtrToTime(it.EndDate),
 			Body:        it.Snapshot.Body.Text,
 			Title:       it.Snapshot.Title,
 			CtaText:     it.Snapshot.CtaText,
@@ -172,6 +172,17 @@ func (c *HTTPClient) FetchAds(ctx context.Context, params AdParams) (AdsResult, 
 		})
 	}
 	return AdsResult{Ads: ads}, nil
+}
+
+// unixPtrToTime converts a possibly-nil unix-seconds pointer (Apify sends
+// JSON null for start_date/end_date on ads with no known date) into a
+// time.Time, returning the zero value when nil rather than misrepresenting
+// "unknown" as the 1970 epoch.
+func unixPtrToTime(sec *int64) time.Time {
+	if sec == nil {
+		return time.Time{}
+	}
+	return time.Unix(*sec, 0).UTC()
 }
 
 // decodeItems reads the full response body, keeping each dataset item's
