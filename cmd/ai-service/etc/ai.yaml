@@ -1,0 +1,9 @@
+Postgres:
+  DSN: postgres://crawl:crawl@localhost:5433/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@localhost:5673/
+  Exchange: crawl
+OpenRouter:
+  ApiKey: ${OPENROUTER_API_KEY}
+  Model: openai/gpt-4o-mini
+  BaseURL: https://openrouter.ai/api/v1
