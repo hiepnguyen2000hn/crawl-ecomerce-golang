@@ -118,7 +118,15 @@ func (c *Consumer) extractOne(ctx context.Context, jobID, adID, url string) {
 		return
 	}
 
-	prompt := fmt.Sprintf("Extract every distinct product mentioned on this page, with its name, price, currency, and SKU if present. If no SKU is given, invent a short stable one from the product name. Page content (Markdown):\n%s", crawlResult.Markdown)
+	md := crawlResult.Markdown
+	if r := []rune(md); len(r) > 24000 {
+		md = string(r[:24000])
+	}
+
+	prompt := fmt.Sprintf("You are extracting product listings from a web page converted to Markdown.\n\n"+
+		"First decide whether this page is actually a product or e-commerce listing page. If it is NOT — for example an app store listing, a blog post, a login or error page, a category index, or a social media profile — return {\"products\": []} and nothing else. Do not derive products from navigation menus, footers, related-item widgets, breadcrumbs, or other page furniture.\n\n"+
+		"If it IS a product page, extract every distinct product actually offered for sale on it. Include a product only if its price is explicitly stated on the page; if no price is stated, omit that product entirely rather than guessing. If no SKU is stated, derive a short stable identifier from the product name.\n\n"+
+		"Page content (Markdown):\n%s", md)
 	raw, err := c.Provider.CompleteJSON(ctx, prompt, "product_extraction", []byte(productSchemaJSON))
 	if err != nil {
 		fmt.Println("worker: AI extraction failed for", url, ":", err)
