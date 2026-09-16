@@ -3,6 +3,7 @@ package svc
 import (
 	"database/sql"
 	"net/http"
+	"time"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/apify"
@@ -23,6 +24,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config: c,
 		DB:     conn,
-		Apify:  apify.NewHTTPClient(c.Apify.ApiToken, c.Apify.ActorID, c.Apify.BaseURL, http.DefaultClient),
+		Apify:  apify.NewHTTPClient(c.Apify.ApiToken, c.Apify.ActorID, c.Apify.BaseURL, &http.Client{Timeout: 5 * time.Minute}),
 	}
 }

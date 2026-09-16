@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/apify"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/rabbitmq"
@@ -45,7 +46,8 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: unmarshal job message: %w", err)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	result, err := c.Apify.FetchAds(ctx, apify.AdParams{
 		Query:        msg.Query,

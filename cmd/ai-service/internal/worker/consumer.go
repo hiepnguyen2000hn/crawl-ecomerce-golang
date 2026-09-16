@@ -31,12 +31,14 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 	var jobType string
 	if err := c.DB.QueryRowContext(ctx, `SELECT type FROM jobs WHERE id = $1`, msg.JobID).Scan(&jobType); err != nil {
+		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: load job type: %w", err)
 	}
 
 	if _, err := c.DB.ExecContext(ctx,
 		`UPDATE jobs SET status = 'ai_processing', updated_at = now() WHERE id = $1`, msg.JobID,
 	); err != nil {
+		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: mark ai_processing: %w", err)
 	}
 
@@ -53,7 +55,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		prompt = fmt.Sprintf("Analyze this Google Trends data and summarize the key insight in 2-3 sentences:\n%s", string(trendData))
 	case "fbads":
 		rows, err := c.DB.QueryContext(ctx,
-			`SELECT title, body FROM fbads_raw WHERE job_id = $1 ORDER BY fetched_at ASC`, msg.JobID)
+			`SELECT COALESCE(title, ''), COALESCE(body, '') FROM fbads_raw WHERE job_id = $1 ORDER BY fetched_at ASC`, msg.JobID)
 		if err != nil {
 			c.markFailed(ctx, msg.JobID)
 			return fmt.Errorf("worker: load fbads_raw: %w", err)

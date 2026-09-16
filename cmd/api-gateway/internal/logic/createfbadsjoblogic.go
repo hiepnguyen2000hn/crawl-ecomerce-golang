@@ -32,6 +32,9 @@ func (l *CreateFbAdsJobLogic) CreateFbAdsJob(req *types.CreateFbAdsJobRequest) (
 	if req.Query == "" && req.PageId == "" {
 		return nil, fmt.Errorf("either query or page_id is required")
 	}
+	if req.MaxItems > 200 {
+		return nil, fmt.Errorf("max_items must be 200 or less")
+	}
 
 	params, err := json.Marshal(req)
 	if err != nil {
