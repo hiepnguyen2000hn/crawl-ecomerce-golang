@@ -1,0 +1,28 @@
+syntax = "v1"
+
+type CreateTrendJobRequest {
+	Keyword string `json:"keyword"`
+}
+
+type CreateTrendJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetTrendJobRequest {
+	Id string `path:"id"`
+}
+
+type GetTrendJobResponse {
+	Status   string `json:"status"`
+	Keyword  string `json:"keyword"`
+	AiOutput string `json:"ai_output"`
+}
+
+service gateway-api {
+	@handler CreateTrendJob
+	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
+
+	@handler GetTrendJob
+	get /jobs/trend/:id (GetTrendJobRequest) returns (GetTrendJobResponse)
+}
+
