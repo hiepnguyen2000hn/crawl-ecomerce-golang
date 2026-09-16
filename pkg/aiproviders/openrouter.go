@@ -78,3 +78,62 @@ func (o *OpenRouter) Complete(ctx context.Context, prompt string) (Result, error
 	}
 	return Result{Model: out.Model, Content: out.Choices[0].Message.Content}, nil
 }
+
+type openRouterJSONRequest struct {
+	Model    string `json:"model"`
+	Messages []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"messages"`
+	ResponseFormat struct {
+		Type       string `json:"type"`
+		JSONSchema struct {
+			Name   string          `json:"name"`
+			Strict bool            `json:"strict"`
+			Schema json.RawMessage `json:"schema"`
+		} `json:"json_schema"`
+	} `json:"response_format"`
+}
+
+func (o *OpenRouter) CompleteJSON(ctx context.Context, prompt string, schemaName string, schema json.RawMessage) (json.RawMessage, error) {
+	reqBody := openRouterJSONRequest{Model: o.model}
+	reqBody.Messages = []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{{Role: "user", Content: prompt}}
+	reqBody.ResponseFormat.Type = "json_schema"
+	reqBody.ResponseFormat.JSONSchema.Name = schemaName
+	reqBody.ResponseFormat.JSONSchema.Strict = true
+	reqBody.ResponseFormat.JSONSchema.Schema = schema
+
+	payload, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("aiproviders: marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("aiproviders: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+o.apiKey)
+
+	resp, err := o.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("aiproviders: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("aiproviders: openrouter returned status %d", resp.StatusCode)
+	}
+
+	var out openRouterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("aiproviders: decode response: %w", err)
+	}
+	if len(out.Choices) == 0 {
+		return nil, fmt.Errorf("aiproviders: openrouter returned no choices")
+	}
+	return json.RawMessage(out.Choices[0].Message.Content), nil
+}
