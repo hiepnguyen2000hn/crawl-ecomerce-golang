@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package trend;
+option go_package = "./trend";
+
+message GetTrendJobRequest {
+  string job_id = 1;
+}
+
+message TrendPointMsg {
+  string date = 1;
+  int32 value = 2;
+}
+
+message GetTrendJobResponse {
+  string status = 1;
+  string keyword = 2;
+  repeated TrendPointMsg points = 3;
+  string ai_output = 4;
+}
+
+service TrendService {
+  rpc GetTrendJob(GetTrendJobRequest) returns (GetTrendJobResponse);
+}

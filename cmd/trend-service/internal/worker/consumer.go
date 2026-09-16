@@ -1,0 +1,65 @@
+package worker
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/rabbitmq"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/serpapi"
+)
+
+type JobMessage struct {
+	JobID   string `json:"job_id"`
+	Keyword string `json:"keyword"`
+}
+
+type CompletedMessage struct {
+	JobID string `json:"job_id"`
+}
+
+// Consumer wires a rabbitmq.Consumer to SerpApi and Postgres: it reads
+// trend.jobs messages, fetches trend data, persists it, and publishes a
+// crawl.completed.trend event.
+type Consumer struct {
+	DB        *sql.DB
+	SerpApi   serpapi.Client
+	Publisher *rabbitmq.Publisher
+}
+
+func (c *Consumer) HandleMessage(body []byte) error {
+	var msg JobMessage
+	if err := json.Unmarshal(body, &msg); err != nil {
+		return fmt.Errorf("worker: unmarshal job message: %w", err)
+	}
+
+	ctx := context.Background()
+
+	result, err := c.SerpApi.FetchTrend(ctx, msg.Keyword)
+	if err != nil {
+		return fmt.Errorf("worker: fetch trend: %w", err)
+	}
+
+	if _, err := c.DB.ExecContext(ctx,
+		`INSERT INTO trend_raw (job_id, keyword, trend_data) VALUES ($1, $2, $3)`,
+		msg.JobID, msg.Keyword, result.Raw,
+	); err != nil {
+		return fmt.Errorf("worker: insert trend_raw: %w", err)
+	}
+
+	if _, err := c.DB.ExecContext(ctx,
+		`UPDATE jobs SET status = 'crawled', updated_at = now() WHERE id = $1`, msg.JobID,
+	); err != nil {
+		return fmt.Errorf("worker: update job status: %w", err)
+	}
+
+	payload, err := json.Marshal(CompletedMessage{JobID: msg.JobID})
+	if err != nil {
+		return fmt.Errorf("worker: marshal completed message: %w", err)
+	}
+	if err := c.Publisher.Publish(ctx, "crawl.completed.trend", payload); err != nil {
+		return fmt.Errorf("worker: publish completed event: %w", err)
+	}
+	return nil
+}
