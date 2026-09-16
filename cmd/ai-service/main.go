@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/ai-service/internal/worker"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/aiproviders"
@@ -36,7 +37,11 @@ func main() {
 	flag.Parse()
 
 	var c Config
-	conf.MustLoad(*configFile, &c)
+	conf.MustLoad(*configFile, &c, conf.UseEnv())
+
+	if c.OpenRouter.ApiKey == "" || strings.Contains(c.OpenRouter.ApiKey, "${") {
+		panic("ai-service: OpenRouter.ApiKey is empty or unexpanded (set OPENROUTER_API_KEY env var)")
+	}
 
 	conn, err := db.Connect(c.Postgres.DSN)
 	if err != nil {

@@ -2,9 +2,23 @@
 # scripts/smoke_test.sh
 set -euo pipefail
 
+KEYWORD="golang"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --keyword)
+      KEYWORD="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
 JOB_ID=$(curl -sf -X POST http://localhost:8888/jobs/trend \
   -H 'Content-Type: application/json' \
-  -d '{"keyword":"golang"}' | jq -r .job_id)
+  -d "{\"keyword\":\"${KEYWORD}\"}" | jq -r .job_id)
 
 echo "Created job: $JOB_ID"
 

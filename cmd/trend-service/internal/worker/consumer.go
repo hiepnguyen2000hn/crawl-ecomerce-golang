@@ -38,6 +38,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 	result, err := c.SerpApi.FetchTrend(ctx, msg.Keyword)
 	if err != nil {
+		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: fetch trend: %w", err)
 	}
 
@@ -45,6 +46,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		`INSERT INTO trend_raw (job_id, keyword, trend_data) VALUES ($1, $2, $3)`,
 		msg.JobID, msg.Keyword, result.Raw,
 	); err != nil {
+		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: insert trend_raw: %w", err)
 	}
 
@@ -62,4 +64,18 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: publish completed event: %w", err)
 	}
 	return nil
+}
+
+// markFailed best-effort sets jobs.status = 'failed' for the given job. Any
+// error from this update is logged and swallowed so it never masks the
+// original error that triggered the failure.
+func (c *Consumer) markFailed(ctx context.Context, jobID string) {
+	if c.DB == nil {
+		return
+	}
+	if _, err := c.DB.ExecContext(ctx,
+		`UPDATE jobs SET status = 'failed', updated_at = now() WHERE id = $1`, jobID,
+	); err != nil {
+		fmt.Println("worker: failed to mark job as failed:", err)
+	}
 }

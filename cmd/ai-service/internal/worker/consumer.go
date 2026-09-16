@@ -45,6 +45,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 	prompt := fmt.Sprintf("Analyze this Google Trends data and summarize the key insight in 2-3 sentences:\n%s", string(trendData))
 	result, err := c.Provider.Complete(ctx, prompt)
 	if err != nil {
+		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: ai completion: %w", err)
 	}
 
@@ -57,6 +58,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		`INSERT INTO ai_results (job_id, provider, model, prompt_type, output) VALUES ($1, 'openrouter', $2, 'analysis', $3)`,
 		msg.JobID, result.Model, output,
 	); err != nil {
+		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: insert ai_results: %w", err)
 	}
 
@@ -66,4 +68,18 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: mark done: %w", err)
 	}
 	return nil
+}
+
+// markFailed best-effort sets jobs.status = 'failed' for the given job. Any
+// error from this update is logged and swallowed so it never masks the
+// original error that triggered the failure.
+func (c *Consumer) markFailed(ctx context.Context, jobID string) {
+	if c.DB == nil {
+		return
+	}
+	if _, err := c.DB.ExecContext(ctx,
+		`UPDATE jobs SET status = 'failed', updated_at = now() WHERE id = $1`, jobID,
+	); err != nil {
+		fmt.Println("worker: failed to mark job as failed:", err)
+	}
 }

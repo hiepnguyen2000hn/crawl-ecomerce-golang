@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/trend-service/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/trend-service/internal/server"
@@ -25,7 +26,11 @@ func main() {
 	flag.Parse()
 
 	var c config.Config
-	conf.MustLoad(*configFile, &c)
+	conf.MustLoad(*configFile, &c, conf.UseEnv())
+
+	if c.SerpApi.ApiKey == "" || strings.Contains(c.SerpApi.ApiKey, "${") {
+		panic("trend-service: SerpApi.ApiKey is empty or unexpanded (set SERPAPI_API_KEY env var)")
+	}
 
 	svcCtx := svc.NewServiceContext(c)
 
