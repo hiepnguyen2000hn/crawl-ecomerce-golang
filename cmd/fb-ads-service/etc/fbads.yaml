@@ -1,0 +1,11 @@
+Name: fb-ads-service
+ListenOn: 0.0.0.0:8082
+Postgres:
+  DSN: postgres://crawl:crawl@localhost:5433/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@localhost:5673/
+  Exchange: crawl
+Apify:
+  ApiToken: ${APIFY_API_TOKEN}
+  ActorID: igolaizola~facebook-ad-library-scraper
+  BaseURL: https://api.apify.com/v2
