@@ -17,4 +17,7 @@ type Config struct {
 	TrendRpc struct {
 		Target string
 	}
+	FbAdsRpc struct {
+		Target string
+	}
 }

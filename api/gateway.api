@@ -18,11 +18,46 @@ type GetTrendJobResponse {
 	AiOutput string `json:"ai_output"`
 }
 
+type CreateFbAdsJobRequest {
+	Query        string   `json:"query,optional"`
+	PageId       string   `json:"page_id,optional"`
+	Country      string   `json:"country,optional"`
+	Category     string   `json:"category,optional"`
+	MediaType    string   `json:"media_type,optional"`
+	SortBy       string   `json:"sort_by,optional"`
+	ActiveStatus string   `json:"active_status,optional"`
+	MinDate      string   `json:"min_date,optional"`
+	MaxDate      string   `json:"max_date,optional"`
+	MaxItems     int      `json:"max_items,optional"`
+	Advertisers  []string `json:"advertisers,optional"`
+	FetchDetails bool     `json:"fetch_details,optional"`
+}
+
+type CreateFbAdsJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetFbAdsJobRequest {
+	Id string `path:"id"`
+}
+
+type GetFbAdsJobResponse {
+	Status   string `json:"status"`
+	AdCount  int32  `json:"ad_count"`
+	AiOutput string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
 
 	@handler GetTrendJob
 	get /jobs/trend/:id (GetTrendJobRequest) returns (GetTrendJobResponse)
+
+	@handler CreateFbAdsJob
+	post /jobs/fbads (CreateFbAdsJobRequest) returns (CreateFbAdsJobResponse)
+
+	@handler GetFbAdsJob
+	get /jobs/fbads/:id (GetFbAdsJobRequest) returns (GetFbAdsJobResponse)
 }
 

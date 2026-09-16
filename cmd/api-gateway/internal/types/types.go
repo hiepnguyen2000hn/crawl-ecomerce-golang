@@ -3,12 +3,41 @@
 
 package types
 
+type CreateFbAdsJobRequest struct {
+	Query        string   `json:"query,optional"`
+	PageId       string   `json:"page_id,optional"`
+	Country      string   `json:"country,optional"`
+	Category     string   `json:"category,optional"`
+	MediaType    string   `json:"media_type,optional"`
+	SortBy       string   `json:"sort_by,optional"`
+	ActiveStatus string   `json:"active_status,optional"`
+	MinDate      string   `json:"min_date,optional"`
+	MaxDate      string   `json:"max_date,optional"`
+	MaxItems     int      `json:"max_items,optional"`
+	Advertisers  []string `json:"advertisers,optional"`
+	FetchDetails bool     `json:"fetch_details,optional"`
+}
+
+type CreateFbAdsJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
 type CreateTrendJobRequest struct {
 	Keyword string `json:"keyword"`
 }
 
 type CreateTrendJobResponse struct {
 	JobId string `json:"job_id"`
+}
+
+type GetFbAdsJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetFbAdsJobResponse struct {
+	Status   string `json:"status"`
+	AdCount  int32  `json:"ad_count"`
+	AiOutput string `json:"ai_output"`
 }
 
 type GetTrendJobRequest struct {

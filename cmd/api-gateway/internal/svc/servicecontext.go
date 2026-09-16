@@ -7,6 +7,7 @@ import (
 	"database/sql"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/config"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/fbads"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/trend-service/trend"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/db"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/rabbitmq"
@@ -19,6 +20,7 @@ type ServiceContext struct {
 	DB        *sql.DB
 	Publisher *rabbitmq.Publisher
 	TrendRpc  trend.TrendServiceClient
+	FbAdsRpc  fbads.FbAdsServiceClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -34,10 +36,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+	fbAdsGrpcConn, err := grpc.NewClient(c.FbAdsRpc.Target, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
 	return &ServiceContext{
 		Config:    c,
 		DB:        conn,
 		Publisher: publisher,
 		TrendRpc:  trend.NewTrendServiceClient(grpcConn),
+		FbAdsRpc:  fbads.NewFbAdsServiceClient(fbAdsGrpcConn),
 	}
 }

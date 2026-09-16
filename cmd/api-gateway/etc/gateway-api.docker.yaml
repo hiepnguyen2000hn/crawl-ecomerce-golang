@@ -8,3 +8,5 @@ RabbitMQ:
   Exchange: crawl
 TrendRpc:
   Target: trend-service:8081
+FbAdsRpc:
+  Target: fb-ads-service:8082
