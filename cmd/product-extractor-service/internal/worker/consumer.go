@@ -118,9 +118,15 @@ func (c *Consumer) extractOne(ctx context.Context, jobID, adID, url string) {
 		return
 	}
 
+	// 18000 runes (not the full 24000 originally used) — verified empirically
+	// against the live OpenRouter API: prompts built from markdown longer
+	// than ~20000-22000 runes get rejected by this model's upstream
+	// provider with a generic HTTP 400 "bad request" (a free-tier backend
+	// limit well below the model's advertised context window), so 18000
+	// leaves headroom for the fixed instruction text around it.
 	md := crawlResult.Markdown
-	if r := []rune(md); len(r) > 24000 {
-		md = string(r[:24000])
+	if r := []rune(md); len(r) > 18000 {
+		md = string(r[:18000])
 	}
 
 	prompt := fmt.Sprintf("You are extracting product listings from a web page converted to Markdown.\n\n"+

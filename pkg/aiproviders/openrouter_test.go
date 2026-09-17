@@ -82,3 +82,53 @@ func TestOpenRouter_CompleteJSON(t *testing.T) {
 		t.Errorf("parsed products = %+v, unexpected", parsed.Products)
 	}
 }
+
+func TestOpenRouter_CompleteJSON_RetriesOnEmptyChoices(t *testing.T) {
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			// Simulate a transient "no choices" response (HTTP 200, empty
+			// choices array) — the failure mode observed against a real
+			// free-tier model on a long prompt.
+			w.Write([]byte(`{"model":"openrouter/test-model","choices":[]}`))
+			return
+		}
+		w.Write([]byte(`{"model":"openrouter/test-model","choices":[{"message":{"content":"{\"products\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	p := NewOpenRouter("test-key", "openrouter/test-model", srv.URL, srv.Client())
+	schema := json.RawMessage(`{"type":"object","properties":{"products":{"type":"array"}},"required":["products"]}`)
+	result, err := p.CompleteJSON(context.Background(), "extract products", "test_schema", schema)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v, want nil after retry succeeds", err)
+	}
+	if callCount != 2 {
+		t.Errorf("callCount = %d, want 2 (one failed attempt, one retry)", callCount)
+	}
+	if string(result) != `{"products":[]}` {
+		t.Errorf("result = %s, unexpected", result)
+	}
+}
+
+func TestOpenRouter_CompleteJSON_ReturnsErrorAfterExhaustingRetries(t *testing.T) {
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"model":"openrouter/test-model","choices":[]}`))
+	}))
+	defer srv.Close()
+
+	p := NewOpenRouter("test-key", "openrouter/test-model", srv.URL, srv.Client())
+	schema := json.RawMessage(`{"type":"object","properties":{"products":{"type":"array"}},"required":["products"]}`)
+	_, err := p.CompleteJSON(context.Background(), "extract products", "test_schema", schema)
+	if err == nil {
+		t.Fatal("expected error after all retry attempts return empty choices, got nil")
+	}
+	if callCount != 2 {
+		t.Errorf("callCount = %d, want 2 (both attempts exhausted)", callCount)
+	}
+}

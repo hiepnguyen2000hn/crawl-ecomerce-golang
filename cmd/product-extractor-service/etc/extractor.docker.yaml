@@ -5,7 +5,7 @@ RabbitMQ:
   Exchange: crawl
 OpenRouter:
   ApiKey: ${OPENROUTER_API_KEY}
-  Model: nvidia/nemotron-3-super-120b-a12b:free
+  Model: dots-studio/dots-3-note-preview:free
   BaseURL: https://openrouter.ai/api/v1
 Crawl4ai:
   BaseURL: http://crawl4ai-service:8000

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // OpenRouter implements Provider against the OpenRouter chat completions API.
@@ -95,7 +96,31 @@ type openRouterJSONRequest struct {
 	} `json:"response_format"`
 }
 
+// CompleteJSON retries once on a transient "no choices" response — some
+// free-tier models occasionally return HTTP 200 with an empty choices
+// array (e.g. after an internal timeout on a long prompt) rather than an
+// error status, and a second attempt frequently succeeds.
 func (o *OpenRouter) CompleteJSON(ctx context.Context, prompt string, schemaName string, schema json.RawMessage) (json.RawMessage, error) {
+	const maxAttempts = 2
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		result, err := o.completeJSONOnce(ctx, prompt, schemaName, schema)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		if attempt < maxAttempts {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(500 * time.Millisecond):
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+func (o *OpenRouter) completeJSONOnce(ctx context.Context, prompt string, schemaName string, schema json.RawMessage) (json.RawMessage, error) {
 	reqBody := openRouterJSONRequest{Model: o.model}
 	reqBody.Messages = []struct {
 		Role    string `json:"role"`
