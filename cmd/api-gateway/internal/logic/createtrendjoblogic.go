@@ -33,7 +33,7 @@ func (l *CreateTrendJobLogic) CreateTrendJob(req *types.CreateTrendJobRequest) (
 		return nil, fmt.Errorf("keyword is required")
 	}
 
-	params, err := json.Marshal(map[string]string{"keyword": req.Keyword})
+	params, err := json.Marshal(map[string]string{"keyword": req.Keyword, "geo": req.Geo})
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (l *CreateTrendJobLogic) CreateTrendJob(req *types.CreateTrendJobRequest) (
 		return nil, fmt.Errorf("insert job: %w", err)
 	}
 
-	msg, err := json.Marshal(map[string]string{"job_id": jobID, "keyword": req.Keyword})
+	msg, err := json.Marshal(map[string]string{"job_id": jobID, "keyword": req.Keyword, "geo": req.Geo})
 	if err != nil {
 		return nil, err
 	}

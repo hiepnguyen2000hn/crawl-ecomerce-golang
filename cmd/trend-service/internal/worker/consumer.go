@@ -13,6 +13,7 @@ import (
 type JobMessage struct {
 	JobID   string `json:"job_id"`
 	Keyword string `json:"keyword"`
+	Geo     string `json:"geo"`
 }
 
 type CompletedMessage struct {
@@ -36,7 +37,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 	ctx := context.Background()
 
-	result, err := c.SerpApi.FetchTrend(ctx, msg.Keyword)
+	result, err := c.SerpApi.FetchTrend(ctx, msg.Keyword, msg.Geo)
 	if err != nil {
 		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: fetch trend: %w", err)

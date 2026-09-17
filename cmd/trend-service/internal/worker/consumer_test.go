@@ -12,12 +12,14 @@ import (
 type fakeSerpApi struct {
 	called  bool
 	keyword string
+	geo     string
 	err     error
 }
 
-func (f *fakeSerpApi) FetchTrend(ctx context.Context, keyword string) (serpapi.TrendResult, error) {
+func (f *fakeSerpApi) FetchTrend(ctx context.Context, keyword, geo string) (serpapi.TrendResult, error) {
 	f.called = true
 	f.keyword = keyword
+	f.geo = geo
 	if f.err != nil {
 		return serpapi.TrendResult{}, f.err
 	}

@@ -24,6 +24,7 @@ type CreateFbAdsJobResponse struct {
 
 type CreateTrendJobRequest struct {
 	Keyword string `json:"keyword"`
+	Geo     string `json:"geo,optional"`
 }
 
 type CreateTrendJobResponse struct {

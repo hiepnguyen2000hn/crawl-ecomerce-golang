@@ -5,6 +5,7 @@ set -euo pipefail
 KEYWORD="golang"
 PATH_TYPE="trend"
 COUNTRY="US"
+GEO=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --keyword)
@@ -19,6 +20,10 @@ while [ $# -gt 0 ]; do
       COUNTRY="$2"
       shift 2
       ;;
+    --geo)
+      GEO="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown argument: $1" >&2
       exit 1
@@ -29,7 +34,7 @@ done
 case "$PATH_TYPE" in
   trend)
     ENDPOINT="jobs/trend"
-    BODY="{\"keyword\":\"${KEYWORD}\"}"
+    BODY="{\"keyword\":\"${KEYWORD}\",\"geo\":\"${GEO}\"}"
     ;;
   fbads)
     ENDPOINT="jobs/fbads"

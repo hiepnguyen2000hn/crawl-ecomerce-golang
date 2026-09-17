@@ -20,7 +20,10 @@ type TrendResult struct {
 }
 
 type Client interface {
-	FetchTrend(ctx context.Context, keyword string) (TrendResult, error)
+	// FetchTrend fetches Google Trends interest-over-time data for keyword,
+	// optionally scoped to a country via geo (a Google Trends location code
+	// such as "VN", "US"; empty means worldwide).
+	FetchTrend(ctx context.Context, keyword, geo string) (TrendResult, error)
 }
 
 type HTTPClient struct {
@@ -41,17 +44,24 @@ type serpApiResponse struct {
 		TimelineData []struct {
 			Date   string `json:"date"`
 			Values []struct {
-				Value int `json:"value"`
+				// SerpAPI returns Value as a string (e.g. "45", sometimes
+				// "<1"); ExtractedValue is the numeric form and is what we
+				// actually want.
+				Value          string `json:"value"`
+				ExtractedValue int    `json:"extracted_value"`
 			} `json:"values"`
 		} `json:"timeline_data"`
 	} `json:"interest_over_time"`
 }
 
-func (c *HTTPClient) FetchTrend(ctx context.Context, keyword string) (TrendResult, error) {
+func (c *HTTPClient) FetchTrend(ctx context.Context, keyword, geo string) (TrendResult, error) {
 	q := url.Values{}
 	q.Set("engine", "google_trends")
 	q.Set("q", keyword)
 	q.Set("api_key", c.apiKey)
+	if geo != "" {
+		q.Set("geo", geo)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/search.json?"+q.Encode(), nil)
 	if err != nil {
@@ -78,7 +88,7 @@ func (c *HTTPClient) FetchTrend(ctx context.Context, keyword string) (TrendResul
 	for _, tl := range body.InterestOverTime.TimelineData {
 		val := 0
 		if len(tl.Values) > 0 {
-			val = tl.Values[0].Value
+			val = tl.Values[0].ExtractedValue
 		}
 		result.Points = append(result.Points, TrendPoint{Date: tl.Date, Value: val})
 	}
