@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Winora</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- React + Babel (no build) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563EB', primaryhover: '#1D4ED8',
+            bg: '#F8FAFC', surface: '#FFFFFF', line: '#E5E7EB',
+            hover: '#F3F4F6', ink: '#111827', muted: '#6B7280',
+            disabled: '#9CA3AF', success: '#16A34A', warning: '#F59E0B',
+            error: '#DC2626', info: '#3B82F6', softblue: '#EFF6FF',
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          borderRadius: { xl: '12px' },
+          boxShadow: {
+            soft: '0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06)',
+            softmd: '0 2px 8px rgba(16,24,40,.08)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; background: #F8FAFC; color: #111827; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 999px; }
+    [data-lucide] { display: inline-block; vertical-align: middle; }
+    .fade-in { animation: fade .18s ease; }
+    @keyframes fade { from { opacity: .4; } to { opacity: 1; } }
+    .drawer-in { animation: drawer .24s cubic-bezier(.32,.72,0,1); }
+    @keyframes drawer { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .row-click { cursor: pointer; }
+    /* Cột ghim: giữ hiệu ứng hover của dòng (nền riêng của td che nền tr) */
+    tr.row-click:hover > td.sticky { background-color: #EFF6FF; }
+    tr:hover > td.sticky { background-color: #F3F4F6; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    // Ép JSX dùng classic runtime (React.createElement) — không có bước build/module loader.
+    Babel.registerPreset('react-classic', {
+      presets: [[Babel.availablePresets['react'], { runtime: 'classic' }]],
+    });
+  </script>
+  <!-- i18n nạp đầu tiên: bọc React.createElement để dịch UI sang EN khi user chọn -->
+  <script src="i18n.js"></script>
+  <!-- benchmark.jsx nạp trước để đăng ký window.BenchmarkPage cho app.jsx dùng -->
+  <script type="text/babel" data-presets="react-classic" src="niche.jsx"></script>
+  <script type="text/babel" data-presets="react-classic" src="benchmark.jsx"></script>
+  <script type="text/babel" data-presets="react-classic" src="app.jsx"></script>
+</body>
+</html>
