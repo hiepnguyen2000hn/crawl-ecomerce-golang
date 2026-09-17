@@ -6,6 +6,8 @@ RabbitMQ:
 OpenRouter:
   ApiKey: ${OPENROUTER_API_KEY}
   Model: dots-studio/dots-3-note-preview:free
+  FallbackModels:
+    - nvidia/nemotron-3-super-120b-a12b:free
   BaseURL: https://openrouter.ai/api/v1
 Crawl4ai:
   BaseURL: http://crawl4ai-service:8000

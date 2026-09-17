@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -83,30 +84,36 @@ func TestOpenRouter_CompleteJSON(t *testing.T) {
 	}
 }
 
-func TestOpenRouter_CompleteJSON_RetriesOnEmptyChoices(t *testing.T) {
-	var callCount int
+func TestOpenRouter_CompleteJSON_FallsBackOnEmptyChoices(t *testing.T) {
+	var modelsSeen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		model, _ := body["model"].(string)
+		modelsSeen = append(modelsSeen, model)
+
 		w.Header().Set("Content-Type", "application/json")
-		if callCount == 1 {
+		if model == "primary-model" {
 			// Simulate a transient "no choices" response (HTTP 200, empty
 			// choices array) — the failure mode observed against a real
 			// free-tier model on a long prompt.
-			w.Write([]byte(`{"model":"openrouter/test-model","choices":[]}`))
+			w.Write([]byte(`{"model":"primary-model","choices":[]}`))
 			return
 		}
-		w.Write([]byte(`{"model":"openrouter/test-model","choices":[{"message":{"content":"{\"products\":[]}"}}]}`))
+		w.Write([]byte(`{"model":"fallback-model","choices":[{"message":{"content":"{\"products\":[]}"}}]}`))
 	}))
 	defer srv.Close()
 
-	p := NewOpenRouter("test-key", "openrouter/test-model", srv.URL, srv.Client())
+	p := NewOpenRouter("test-key", "primary-model", srv.URL, srv.Client(), "fallback-model")
 	schema := json.RawMessage(`{"type":"object","properties":{"products":{"type":"array"}},"required":["products"]}`)
 	result, err := p.CompleteJSON(context.Background(), "extract products", "test_schema", schema)
 	if err != nil {
-		t.Fatalf("CompleteJSON() error = %v, want nil after retry succeeds", err)
+		t.Fatalf("CompleteJSON() error = %v, want nil after falling back", err)
 	}
-	if callCount != 2 {
-		t.Errorf("callCount = %d, want 2 (one failed attempt, one retry)", callCount)
+	if len(modelsSeen) != 2 || modelsSeen[0] != "primary-model" || modelsSeen[1] != "fallback-model" {
+		t.Errorf("modelsSeen = %v, want [primary-model fallback-model]", modelsSeen)
 	}
 	if string(result) != `{"products":[]}` {
 		t.Errorf("result = %s, unexpected", result)
@@ -126,9 +133,61 @@ func TestOpenRouter_CompleteJSON_ReturnsErrorAfterExhaustingRetries(t *testing.T
 	schema := json.RawMessage(`{"type":"object","properties":{"products":{"type":"array"}},"required":["products"]}`)
 	_, err := p.CompleteJSON(context.Background(), "extract products", "test_schema", schema)
 	if err == nil {
-		t.Fatal("expected error after all retry attempts return empty choices, got nil")
+		t.Fatal("expected error when the only model returns no choices, got nil")
 	}
-	if callCount != 2 {
-		t.Errorf("callCount = %d, want 2 (both attempts exhausted)", callCount)
+	if callCount != 1 {
+		t.Errorf("callCount = %d, want 1 (single model, no fallback configured)", callCount)
+	}
+}
+
+func TestOpenRouter_CompleteJSON_FallsBackToNextModelOnError(t *testing.T) {
+	var modelsSeen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		model, _ := body["model"].(string)
+		modelsSeen = append(modelsSeen, model)
+
+		w.Header().Set("Content-Type", "application/json")
+		if model == "primary-model" {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"overloaded"}`))
+			return
+		}
+		w.Write([]byte(`{"model":"fallback-model","choices":[{"message":{"content":"{\"products\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	p := NewOpenRouter("test-key", "primary-model", srv.URL, srv.Client(), "fallback-model")
+	schema := json.RawMessage(`{"type":"object","properties":{"products":{"type":"array"}},"required":["products"]}`)
+	result, err := p.CompleteJSON(context.Background(), "extract products", "test_schema", schema)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v, want nil after falling back", err)
+	}
+	if string(result) != `{"products":[]}` {
+		t.Errorf("result = %s, unexpected", result)
+	}
+	if len(modelsSeen) != 2 || modelsSeen[0] != "primary-model" || modelsSeen[1] != "fallback-model" {
+		t.Errorf("modelsSeen = %v, want [primary-model fallback-model]", modelsSeen)
+	}
+}
+
+func TestOpenRouter_CompleteJSON_ErrorIncludesResponseBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":{"message":"model does not support structured outputs"}}`))
+	}))
+	defer srv.Close()
+
+	p := NewOpenRouter("test-key", "primary-model", srv.URL, srv.Client())
+	schema := json.RawMessage(`{"type":"object","properties":{"products":{"type":"array"}},"required":["products"]}`)
+	_, err := p.CompleteJSON(context.Background(), "extract products", "test_schema", schema)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "model does not support structured outputs") {
+		t.Errorf("error = %v, want it to include the response body", err)
 	}
 }

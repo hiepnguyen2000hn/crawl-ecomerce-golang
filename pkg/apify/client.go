@@ -29,7 +29,7 @@ type Ad struct {
 
 // AdParams mirrors the Apify actor's input schema. All fields are
 // optional except MaxItems, which the client always sends (defaulting
-// to 10 when unset) since the actor requires it.
+// to 50 when unset) since the actor requires it.
 type AdParams struct {
 	Query        string
 	PageID       string
@@ -108,7 +108,7 @@ type apifyAdItem struct {
 func (c *HTTPClient) FetchAds(ctx context.Context, params AdParams) (AdsResult, error) {
 	maxItems := params.MaxItems
 	if maxItems <= 0 {
-		maxItems = 10
+		maxItems = 50
 	}
 	input := apifyRunInput{
 		Query:        params.Query,

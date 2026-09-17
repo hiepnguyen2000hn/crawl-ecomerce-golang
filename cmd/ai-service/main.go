@@ -25,9 +25,10 @@ type Config struct {
 		Exchange string
 	}
 	OpenRouter struct {
-		ApiKey  string
-		Model   string
-		BaseURL string
+		ApiKey         string
+		Model          string
+		FallbackModels []string `json:",optional"`
+		BaseURL        string
 	}
 }
 
@@ -48,7 +49,7 @@ func main() {
 		panic(err)
 	}
 
-	provider := aiproviders.NewOpenRouter(c.OpenRouter.ApiKey, c.OpenRouter.Model, c.OpenRouter.BaseURL, http.DefaultClient)
+	provider := aiproviders.NewOpenRouter(c.OpenRouter.ApiKey, c.OpenRouter.Model, c.OpenRouter.BaseURL, http.DefaultClient, c.OpenRouter.FallbackModels...)
 
 	consumer, err := rabbitmq.NewConsumer(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})
 	if err != nil {

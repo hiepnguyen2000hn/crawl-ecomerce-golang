@@ -27,9 +27,10 @@ type Config struct {
 		Exchange string
 	}
 	OpenRouter struct {
-		ApiKey  string
-		Model   string
-		BaseURL string
+		ApiKey         string
+		Model          string
+		FallbackModels []string `json:",optional"`
+		BaseURL        string
 	}
 	Crawl4ai struct {
 		BaseURL string
@@ -53,7 +54,7 @@ func main() {
 		panic(err)
 	}
 
-	provider := aiproviders.NewOpenRouter(c.OpenRouter.ApiKey, c.OpenRouter.Model, c.OpenRouter.BaseURL, http.DefaultClient)
+	provider := aiproviders.NewOpenRouter(c.OpenRouter.ApiKey, c.OpenRouter.Model, c.OpenRouter.BaseURL, http.DefaultClient, c.OpenRouter.FallbackModels...)
 	crawler := crawl4ai.NewHTTPClient(c.Crawl4ai.BaseURL, &http.Client{Timeout: 2 * time.Minute}) // crawl4ai pages can be slow
 
 	consumer, err := rabbitmq.NewConsumer(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})

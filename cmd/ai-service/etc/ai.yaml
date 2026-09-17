@@ -6,4 +6,8 @@ RabbitMQ:
 OpenRouter:
   ApiKey: ${OPENROUTER_API_KEY}
   Model: nvidia/nemotron-3-super-120b-a12b:free
+  # Tried in order if Model fails (free-tier models get overloaded); add
+  # more verified free model slugs from openrouter.ai/models as needed.
+  FallbackModels:
+    - dots-studio/dots-3-note-preview:free
   BaseURL: https://openrouter.ai/api/v1
