@@ -107,6 +107,22 @@ services:
         condition: service_started
     restart: on-failure:5
 
+  niche-research-service:
+    build:
+      context: .
+      dockerfile: cmd/niche-research-service/Dockerfile
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8084:8084"
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .

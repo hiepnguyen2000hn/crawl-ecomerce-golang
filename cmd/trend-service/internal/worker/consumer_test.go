@@ -16,7 +16,7 @@ type fakeSerpApi struct {
 	err     error
 }
 
-func (f *fakeSerpApi) FetchTrend(ctx context.Context, keyword, geo string) (serpapi.TrendResult, error) {
+func (f *fakeSerpApi) FetchTrend(ctx context.Context, keyword, geo, dateRange string) (serpapi.TrendResult, error) {
 	f.called = true
 	f.keyword = keyword
 	f.geo = geo

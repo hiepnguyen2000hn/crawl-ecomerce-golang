@@ -1,0 +1,12 @@
+ListenOn: 0.0.0.0:8084
+Postgres:
+  DSN: postgres://crawl:crawl@localhost:5433/crawl?sslmode=disable
+OpenRouter:
+  ApiKey: ${OPENROUTER_API_KEY}
+  Model: nvidia/nemotron-3-super-120b-a12b:free
+  FallbackModels:
+    - dots-studio/dots-3-note-preview:free
+  BaseURL: https://openrouter.ai/api/v1
+SerpApi:
+  ApiKey: ${SERPAPI_API_KEY}
+  BaseURL: https://serpapi.com

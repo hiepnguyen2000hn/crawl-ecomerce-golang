@@ -1126,39 +1126,55 @@ function nicheRecomputeQuote(p, session) {
 /* ---- Meta & danh sách phiên ---- */
 addRoute("GET", "/api/niche/meta", () => NICHE_META);
 
-addRoute("GET", "/api/niche/sessions", () => NICHE_SESSIONS.slice().sort(
-  (a, b) => new Date(b.last_run_at || 0) - new Date(a.last_run_at || 0)));
+/* Step 1 (list + create/run) đã ghép API thật (cmd/niche-research-service).
+   Các endpoint step2-4/audience/targeting/... vẫn mock — nichePutReal() điền
+   đủ field mặc định "draft" cho các phần đó để trang chi tiết không vỡ khi
+   mở 1 session đến từ backend thật. Đổi NICHE_API_BASE khi deploy nơi khác. */
+const NICHE_API_BASE = "http://localhost:8084";
 
-addRoute("POST", "/api/niche/sessions", ({ body }) => {
-  if (!body || !body.raw_keyword || !body.raw_keyword.trim()) {
-    throw new Error("Thiếu keyword ngách");
-  }
-  if (!body.country_codes || !body.country_codes.length) {
-    throw new Error("Chọn ít nhất 1 thị trường");
-  }
-  const id = uid("niche");
-  const countries = body.country_codes.map((code) => ({
-    code, name: NICHE_COUNTRY_NAME[code] || code,
-  }));
-  const session = {
-    id, raw_keyword: body.raw_keyword.trim(), countries,
-    country_code: countries[0].code, country_name: countries[0].name,
-    status: "draft", progress: 0, stage: "Chưa chạy", message: null,
-    step1_score: null, avg_monthly_searches: null, demand_type: null, demand_label: null,
-    kw_source: null, volume_source: null, ai_source: null,
-    peak_months: [], low_months: [], trend_direction: null, volatility: null, volatility_label: null,
-    fluctuation_ratio: null, cv: null, seasonality_note: null, ai_summary: null,
-    ai_risks: [], ai_actions: [], cogs_share: null, ads_share: null,
+function nichePutReal(real) {
+  const existing = NICHE_SESSIONS.find((x) => x.id === real.id);
+  const session = existing || {
     step2_status: "draft", step2_progress: 0, step2_stage: null, step2_message: null, step2_score: null,
     last_step2_at: null, ads_source: null, ecom_source: null,
     step3_status: "draft", step3_progress: 0, step3_stage: null, step3_message: null, step3_score: null,
     last_step3_at: null, price_source: null, benchmark_source: null,
     step4_status: "draft", step4_progress: 0, step4_stage: null, step4_message: null, step4_score: null,
     last_step4_at: null, warehouse: null, target_moq: null,
-    last_run_at: null,
+    cogs_share: null, ads_share: null, message: null,
   };
-  NICHE_SESSIONS.unshift(session);
+  Object.assign(session, real, {
+    peak_months: real.peak_months || [], low_months: real.low_months || [],
+    ai_risks: real.ai_risks || [], ai_actions: real.ai_actions || [],
+  });
+  if (!existing) NICHE_SESSIONS.unshift(session);
   return session;
+}
+
+addRoute("GET", "/api/niche/sessions", async () => {
+  const res = await fetch(`${NICHE_API_BASE}/api/niche/sessions`);
+  if (!res.ok) throw new Error(`niche-research-service: ${res.status}`);
+  const real = await res.json();
+  return real.map(nichePutReal);
+});
+
+addRoute("POST", "/api/niche/sessions", async ({ body }) => {
+  if (!body || !body.raw_keyword || !body.raw_keyword.trim()) {
+    throw new Error("Thiếu keyword ngách");
+  }
+  if (!body.country_codes || !body.country_codes.length) {
+    throw new Error("Chọn ít nhất 1 thị trường");
+  }
+  const res = await fetch(`${NICHE_API_BASE}/api/niche/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw_keyword: body.raw_keyword.trim(), country_codes: body.country_codes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `niche-research-service: ${res.status}`);
+  }
+  return nichePutReal(await res.json());
 });
 
 addRoute("GET", "/api/niche/sessions/([^/]+)", ({ params }) => nicheFindSession(params[0]));

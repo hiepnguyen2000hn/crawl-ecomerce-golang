@@ -1,0 +1,26 @@
+-- db/migrations/000004_niche_sessions.up.sql
+CREATE TABLE niche_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    raw_keyword TEXT NOT NULL,
+    countries JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    step1_score NUMERIC,
+    avg_monthly_searches INTEGER,
+    demand_type TEXT,
+    demand_label TEXT,
+    kw_source TEXT,
+    volume_source TEXT,
+    ai_source TEXT,
+    peak_months JSONB NOT NULL DEFAULT '[]',
+    low_months JSONB NOT NULL DEFAULT '[]',
+    trend_direction TEXT,
+    volatility TEXT,
+    volatility_label TEXT,
+    fluctuation_ratio NUMERIC,
+    seasonality_note TEXT,
+    ai_summary TEXT,
+    ai_risks JSONB NOT NULL DEFAULT '[]',
+    ai_actions JSONB NOT NULL DEFAULT '[]',
+    last_run_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

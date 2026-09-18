@@ -37,7 +37,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 	ctx := context.Background()
 
-	result, err := c.SerpApi.FetchTrend(ctx, msg.Keyword, msg.Geo)
+	result, err := c.SerpApi.FetchTrend(ctx, msg.Keyword, msg.Geo, "")
 	if err != nil {
 		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: fetch trend: %w", err)

@@ -22,8 +22,10 @@ type TrendResult struct {
 type Client interface {
 	// FetchTrend fetches Google Trends interest-over-time data for keyword,
 	// optionally scoped to a country via geo (a Google Trends location code
-	// such as "VN", "US"; empty means worldwide).
-	FetchTrend(ctx context.Context, keyword, geo string) (TrendResult, error)
+	// such as "VN", "US"; empty means worldwide) and to a Google Trends
+	// date range via dateRange (e.g. "today 12-m", "today 24-m"; empty
+	// defaults to "today 12-m").
+	FetchTrend(ctx context.Context, keyword, geo, dateRange string) (TrendResult, error)
 }
 
 type HTTPClient struct {
@@ -54,11 +56,18 @@ type serpApiResponse struct {
 	} `json:"interest_over_time"`
 }
 
-func (c *HTTPClient) FetchTrend(ctx context.Context, keyword, geo string) (TrendResult, error) {
+func (c *HTTPClient) FetchTrend(ctx context.Context, keyword, geo, dateRange string) (TrendResult, error) {
 	q := url.Values{}
 	q.Set("engine", "google_trends")
 	q.Set("q", keyword)
 	q.Set("api_key", c.apiKey)
+	if dateRange == "" {
+		// Explicitly request the trailing 12 months rather than relying on
+		// SerpAPI's default (currently also "today 12-m", but the API
+		// could change its default without notice).
+		dateRange = "today 12-m"
+	}
+	q.Set("date", dateRange)
 	if geo != "" {
 		q.Set("geo", geo)
 	}
