@@ -104,18 +104,39 @@ func (c *Consumer) HandleMessage(body []byte) error {
 // logged and swallowed — see the Consumer doc comment on why this never
 // returns an error to HandleMessage's caller.
 func (c *Consumer) extractOne(ctx context.Context, jobID, adID, url string) {
+	products, err := c.extractProducts(ctx, url)
+	if err != nil {
+		fmt.Println("worker:", err)
+		return
+	}
+
+	for _, p := range products {
+		productJSON, err := json.Marshal(p)
+		if err != nil {
+			fmt.Println("worker: failed to marshal product for storage:", err)
+			continue
+		}
+		if _, err := c.DB.ExecContext(ctx,
+			`INSERT INTO products (job_id, ad_id, url, product_name, price, currency, sku, raw) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			jobID, adID, url, p.ProductName, p.Price, p.Currency, p.SKU, productJSON,
+		); err != nil {
+			fmt.Println("worker: failed to insert product for", url, ":", err)
+		}
+	}
+}
+
+// extractProducts crawls url and extracts the products offered on it. It
+// touches no database, so it can be exercised against real pages on its own.
+func (c *Consumer) extractProducts(ctx context.Context, url string) ([]extractedProduct, error) {
 	crawlResult, err := c.Crawler.Crawl(ctx, url)
 	if err != nil {
-		fmt.Println("worker: crawl4ai request failed for", url, ":", err)
-		return
+		return nil, fmt.Errorf("crawl4ai request failed for %s: %w", url, err)
 	}
 	if !crawlResult.Success {
-		fmt.Println("worker: crawl4ai reported failure for", url, ":", crawlResult.Error)
-		return
+		return nil, fmt.Errorf("crawl4ai reported failure for %s: %s", url, crawlResult.Error)
 	}
 	if crawlResult.Markdown == "" {
-		fmt.Println("worker: crawl4ai returned empty markdown for", url)
-		return
+		return nil, fmt.Errorf("crawl4ai returned empty markdown for %s", url)
 	}
 
 	// 18000 runes (not the full 24000 originally used) — verified empirically
@@ -135,27 +156,12 @@ func (c *Consumer) extractOne(ctx context.Context, jobID, adID, url string) {
 		"Page content (Markdown):\n%s", md)
 	raw, err := c.Provider.CompleteJSON(ctx, prompt, "product_extraction", []byte(productSchemaJSON))
 	if err != nil {
-		fmt.Println("worker: AI extraction failed for", url, ":", err)
-		return
+		return nil, fmt.Errorf("AI extraction failed for %s: %w", url, err)
 	}
 
 	var extracted extractedProducts
 	if err := json.Unmarshal(raw, &extracted); err != nil {
-		fmt.Println("worker: failed to parse extracted products for", url, ":", err)
-		return
+		return nil, fmt.Errorf("failed to parse extracted products for %s: %w", url, err)
 	}
-
-	for _, p := range extracted.Products {
-		productJSON, err := json.Marshal(p)
-		if err != nil {
-			fmt.Println("worker: failed to marshal product for storage:", err)
-			continue
-		}
-		if _, err := c.DB.ExecContext(ctx,
-			`INSERT INTO products (job_id, ad_id, url, product_name, price, currency, sku, raw) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			jobID, adID, url, p.ProductName, p.Price, p.Currency, p.SKU, productJSON,
-		); err != nil {
-			fmt.Println("worker: failed to insert product for", url, ":", err)
-		}
-	}
+	return extracted.Products, nil
 }
