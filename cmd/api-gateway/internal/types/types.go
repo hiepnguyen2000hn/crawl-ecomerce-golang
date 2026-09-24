@@ -3,6 +3,17 @@
 
 package types
 
+type CreateAmazonJobRequest struct {
+	Keyword  string   `json:"keyword,optional"`
+	Urls     []string `json:"urls,optional"`
+	Country  string   `json:"country,optional"`
+	MaxItems int      `json:"max_items,optional"`
+}
+
+type CreateAmazonJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
 type CreateFbAdsJobRequest struct {
 	Query        string   `json:"query,optional"`
 	PageId       string   `json:"page_id,optional"`
@@ -29,6 +40,16 @@ type CreateTrendJobRequest struct {
 
 type CreateTrendJobResponse struct {
 	JobId string `json:"job_id"`
+}
+
+type GetAmazonJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetAmazonJobResponse struct {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
 }
 
 type GetFbAdsJobRequest struct {

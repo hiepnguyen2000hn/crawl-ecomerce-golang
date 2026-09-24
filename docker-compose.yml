@@ -123,6 +123,23 @@ services:
       - "8084:8084"
     restart: on-failure:5
 
+  amazon-service:
+    build:
+      context: .
+      dockerfile: cmd/amazon-service/Dockerfile
+    environment:
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure:5
+    ports:
+      - "8085:8085"
+
   api-gateway:
     build:
       context: .
@@ -135,6 +152,8 @@ services:
       trend-service:
         condition: service_started
       fb-ads-service:
+        condition: service_started
+      amazon-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully
