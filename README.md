@@ -8,8 +8,11 @@ A small e-commerce trend-crawling platform built as four Go microservices:
   Facebook Ads Library data via Apify and persists it.
 - **ai-service** — a RabbitMQ worker that takes the crawled trend or fbads
   data and asks an OpenRouter-hosted LLM to summarize the key insight.
-- **api-gateway** — a REST API (go-zero) that lets clients create trend or
-  fbads jobs and poll their status/results.
+- **amazon-service** — a gRPC service backed by a RabbitMQ worker that
+  fetches Amazon product data (search by keyword or crawl specific product
+  URLs/ASINs) via an Apify actor and persists it.
+- **api-gateway** — a REST API (go-zero) that lets clients create trend,
+  fbads, or amazon jobs and poll their status/results.
 
 The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
@@ -46,6 +49,8 @@ Two crawl paths are exposed by `api-gateway`:
 
 - `POST /jobs/trend` — `{"keyword": "golang"}` — `GET /jobs/trend/{id}`
 - `POST /jobs/fbads` — `{"query": "nike", "country": "US"}` — `GET /jobs/fbads/{id}`
+- `POST /jobs/amazon` — `{"keyword": "wireless earbuds", "country": "US"}` or
+  `{"urls": ["https://www.amazon.com/dp/B0..."]}` — `GET /jobs/amazon/{id}`
 
 ## Prerequisites
 
@@ -72,8 +77,8 @@ from [openrouter.ai](https://openrouter.ai), and an Apify token from
 [apify.com](https://apify.com). Docker Compose automatically loads `.env`
 from the repo root and uses it to fill in the
 `SERPAPI_API_KEY`/`OPENROUTER_API_KEY`/`APIFY_API_TOKEN` environment
-variables passed into the `trend-service`, `ai-service`, and
-`fb-ads-service` containers.
+variables passed into the `trend-service`, `ai-service`, `fb-ads-service`,
+and `amazon-service` containers.
 
 ## Run
 

@@ -10,3 +10,5 @@ TrendRpc:
   Target: 127.0.0.1:8081
 FbAdsRpc:
   Target: 127.0.0.1:8082
+AmazonRpc:
+  Target: 127.0.0.1:8085

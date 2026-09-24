@@ -1,0 +1,11 @@
+Name: amazon-service
+ListenOn: 0.0.0.0:8085
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+Apify:
+  ApiToken: ${APIFY_API_TOKEN}
+  ActorID: junglee~amazon-crawler
+  BaseURL: https://api.apify.com/v2

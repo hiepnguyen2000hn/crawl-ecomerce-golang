@@ -20,4 +20,7 @@ type Config struct {
 	FbAdsRpc struct {
 		Target string
 	}
+	AmazonRpc struct {
+		Target string
+	}
 }

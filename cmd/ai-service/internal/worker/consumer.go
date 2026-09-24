@@ -78,6 +78,33 @@ func (c *Consumer) HandleMessage(body []byte) error {
 			return fmt.Errorf("worker: iterate fbads_raw: %w", err)
 		}
 		prompt = fmt.Sprintf("Analyze these %d Facebook ad creatives and summarize the common patterns, messaging themes, and calls to action in 3-4 sentences:\n%s", count, sb.String())
+	case "amazon":
+		rows, err := c.DB.QueryContext(ctx,
+			`SELECT COALESCE(title, ''), COALESCE(price, 0), COALESCE(currency, ''), COALESCE(rating, 0), COALESCE(reviews_count, 0) FROM amazon_raw WHERE job_id = $1 ORDER BY fetched_at ASC`, msg.JobID)
+		if err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: load amazon_raw: %w", err)
+		}
+		var sb strings.Builder
+		count := 0
+		for rows.Next() {
+			var title, currency string
+			var price, rating float64
+			var reviewsCount int
+			if err := rows.Scan(&title, &price, &currency, &rating, &reviewsCount); err != nil {
+				rows.Close()
+				c.markFailed(ctx, msg.JobID)
+				return fmt.Errorf("worker: scan amazon_raw: %w", err)
+			}
+			fmt.Fprintf(&sb, "Product %d — %s | Price: %.2f %s | Rating: %.1f (%d reviews)\n", count+1, title, price, currency, rating, reviewsCount)
+			count++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: iterate amazon_raw: %w", err)
+		}
+		prompt = fmt.Sprintf("Analyze these %d Amazon products and summarize the price range, typical rating, and any standout listings in 3-4 sentences:\n%s", count, sb.String())
 	default:
 		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: unknown job type %q", jobType)

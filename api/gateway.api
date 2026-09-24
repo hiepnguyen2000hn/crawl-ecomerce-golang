@@ -2,6 +2,7 @@ syntax = "v1"
 
 type CreateTrendJobRequest {
 	Keyword string `json:"keyword"`
+	Geo     string `json:"geo,optional"`
 }
 
 type CreateTrendJobResponse {
@@ -47,6 +48,27 @@ type GetFbAdsJobResponse {
 	AiOutput string `json:"ai_output"`
 }
 
+type CreateAmazonJobRequest {
+	Keyword  string   `json:"keyword,optional"`
+	Urls     []string `json:"urls,optional"`
+	Country  string   `json:"country,optional"`
+	MaxItems int      `json:"max_items,optional"`
+}
+
+type CreateAmazonJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetAmazonJobRequest {
+	Id string `path:"id"`
+}
+
+type GetAmazonJobResponse {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -59,5 +81,11 @@ service gateway-api {
 
 	@handler GetFbAdsJob
 	get /jobs/fbads/:id (GetFbAdsJobRequest) returns (GetFbAdsJobResponse)
+
+	@handler CreateAmazonJob
+	post /jobs/amazon (CreateAmazonJobRequest) returns (CreateAmazonJobResponse)
+
+	@handler GetAmazonJob
+	get /jobs/amazon/:id (GetAmazonJobRequest) returns (GetAmazonJobResponse)
 }
 

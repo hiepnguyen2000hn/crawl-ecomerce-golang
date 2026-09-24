@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package amazon;
+option go_package = "./amazon";
+
+message GetAmazonJobRequest {
+  string job_id = 1;
+}
+
+message GetAmazonJobResponse {
+  string status = 1;
+  int32 product_count = 2;
+  string ai_output = 3;
+}
+
+service AmazonService {
+  rpc GetAmazonJob(GetAmazonJobRequest) returns (GetAmazonJobResponse);
+}

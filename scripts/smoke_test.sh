@@ -40,8 +40,12 @@ case "$PATH_TYPE" in
     ENDPOINT="jobs/fbads"
     BODY="{\"query\":\"${KEYWORD}\",\"country\":\"${COUNTRY}\"}"
     ;;
+  amazon)
+    ENDPOINT="jobs/amazon"
+    BODY="{\"keyword\":\"${KEYWORD}\",\"country\":\"${COUNTRY}\"}"
+    ;;
   *)
-    echo "Unknown --path: $PATH_TYPE (expected 'trend' or 'fbads')" >&2
+    echo "Unknown --path: $PATH_TYPE (expected 'trend', 'fbads', or 'amazon')" >&2
     exit 1
     ;;
 esac
