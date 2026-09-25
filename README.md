@@ -18,6 +18,10 @@ The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
 [`docs/superpowers/specs/2026-09-16-crawl-ecommerce-platform-design.md`](docs/superpowers/specs/2026-09-16-crawl-ecommerce-platform-design.md).
 
+For a per-service breakdown of what each crawler fetches, which tool/API it
+uses, and example data, see [`docs/SERVICES.md`](docs/SERVICES.md) (mô tả chi
+tiết các service crawl kèm ví dụ dữ liệu, bằng tiếng Việt).
+
 ### Product-extraction enrichment pipeline
 
 Two additional services enrich each Facebook Ads crawl with structured
