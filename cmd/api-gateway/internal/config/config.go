@@ -23,4 +23,7 @@ type Config struct {
 	AmazonRpc struct {
 		Target string
 	}
+	China1688Rpc struct {
+		Target string
+	}
 }

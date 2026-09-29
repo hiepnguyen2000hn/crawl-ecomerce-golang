@@ -8,6 +8,7 @@ import (
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/amazon"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/config"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/china1688-service/china1688"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/fbads"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/trend-service/trend"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/db"
@@ -17,12 +18,13 @@ import (
 )
 
 type ServiceContext struct {
-	Config    config.Config
-	DB        *sql.DB
-	Publisher *rabbitmq.Publisher
-	TrendRpc  trend.TrendServiceClient
-	FbAdsRpc  fbads.FbAdsServiceClient
-	AmazonRpc amazon.AmazonServiceClient
+	Config       config.Config
+	DB           *sql.DB
+	Publisher    *rabbitmq.Publisher
+	TrendRpc     trend.TrendServiceClient
+	FbAdsRpc     fbads.FbAdsServiceClient
+	AmazonRpc    amazon.AmazonServiceClient
+	China1688Rpc china1688.China1688ServiceClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -46,12 +48,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+	china1688GrpcConn, err := grpc.NewClient(c.China1688Rpc.Target, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
 	return &ServiceContext{
-		Config:    c,
-		DB:        conn,
-		Publisher: publisher,
-		TrendRpc:  trend.NewTrendServiceClient(grpcConn),
-		FbAdsRpc:  fbads.NewFbAdsServiceClient(fbAdsGrpcConn),
-		AmazonRpc: amazon.NewAmazonServiceClient(amazonGrpcConn),
+		Config:       c,
+		DB:           conn,
+		Publisher:    publisher,
+		TrendRpc:     trend.NewTrendServiceClient(grpcConn),
+		FbAdsRpc:     fbads.NewFbAdsServiceClient(fbAdsGrpcConn),
+		AmazonRpc:    amazon.NewAmazonServiceClient(amazonGrpcConn),
+		China1688Rpc: china1688.NewChina1688ServiceClient(china1688GrpcConn),
 	}
 }

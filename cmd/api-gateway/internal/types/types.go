@@ -14,6 +14,16 @@ type CreateAmazonJobResponse struct {
 	JobId string `json:"job_id"`
 }
 
+type CreateChina1688JobRequest struct {
+	Keywords []string `json:"keywords,optional"`
+	OfferIds []string `json:"offer_ids,optional"`
+	MaxItems int      `json:"max_items,optional"`
+}
+
+type CreateChina1688JobResponse struct {
+	JobId string `json:"job_id"`
+}
+
 type CreateFbAdsJobRequest struct {
 	Query        string   `json:"query,optional"`
 	PageId       string   `json:"page_id,optional"`
@@ -47,6 +57,16 @@ type GetAmazonJobRequest struct {
 }
 
 type GetAmazonJobResponse struct {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
+type GetChina1688JobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetChina1688JobResponse struct {
 	Status       string `json:"status"`
 	ProductCount int32  `json:"product_count"`
 	AiOutput     string `json:"ai_output"`

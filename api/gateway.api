@@ -69,6 +69,26 @@ type GetAmazonJobResponse {
 	AiOutput     string `json:"ai_output"`
 }
 
+type CreateChina1688JobRequest {
+	Keywords []string `json:"keywords,optional"`
+	OfferIds []string `json:"offer_ids,optional"`
+	MaxItems int      `json:"max_items,optional"`
+}
+
+type CreateChina1688JobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetChina1688JobRequest {
+	Id string `path:"id"`
+}
+
+type GetChina1688JobResponse {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -87,5 +107,11 @@ service gateway-api {
 
 	@handler GetAmazonJob
 	get /jobs/amazon/:id (GetAmazonJobRequest) returns (GetAmazonJobResponse)
+
+	@handler CreateChina1688Job
+	post /jobs/china1688 (CreateChina1688JobRequest) returns (CreateChina1688JobResponse)
+
+	@handler GetChina1688Job
+	get /jobs/china1688/:id (GetChina1688JobRequest) returns (GetChina1688JobResponse)
 }
 

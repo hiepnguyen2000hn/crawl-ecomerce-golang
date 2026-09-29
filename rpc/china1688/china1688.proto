@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package china1688;
+option go_package = "./china1688";
+
+message GetChina1688JobRequest {
+  string job_id = 1;
+}
+
+message GetChina1688JobResponse {
+  string status = 1;
+  int32 product_count = 2;
+  string ai_output = 3;
+}
+
+service China1688Service {
+  rpc GetChina1688Job(GetChina1688JobRequest) returns (GetChina1688JobResponse);
+}

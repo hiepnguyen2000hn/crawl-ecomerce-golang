@@ -171,7 +171,45 @@ curl -X POST localhost:8891/api/niche/sessions \
 
 ---
 
-## 6. crawl4ai-service — hạ tầng crawl HTML → Markdown
+## 6. china1688-service — 1688 Wholesale Product
+
+- **Crawl gì:** dữ liệu sản phẩm bán buôn trên 1688.com — tìm theo **từ khoá** (tiếng Trung/Anh) hoặc crawl trực tiếp theo **offer ID**.
+- **Tool/API dùng:** Apify actor [`zen-studio/1688-wholesale-scraper`](https://apify.com/zen-studio/1688-wholesale-scraper) — cùng client [`pkg/apify`](../pkg/apify).
+- **Cơ chế:** `api-gateway` → RabbitMQ → `china1688-service` (gRPC + worker, proto tại [`rpc/china1688`](../rpc/china1688)) gọi Apify, lưu vào `china1688_raw`.
+- **Bảng lưu:** `china1688_raw` (`db/migrations/000006_china1688.up.sql`).
+- **Request mẫu (tìm theo từ khoá):**
+
+```sh
+curl -X POST localhost:8888/jobs/china1688 \
+  -d '{"keywords": ["蓝牙耳机"]}'
+```
+
+- **Request mẫu (crawl theo offer ID cụ thể):**
+
+```sh
+curl -X POST localhost:8888/jobs/china1688 \
+  -d '{"offer_ids": ["123456789"]}'
+```
+
+- **Dữ liệu mẫu (1 row trong `china1688_raw`):**
+
+| cột | giá trị mẫu |
+|---|---|
+| `offer_id` | `123456789` |
+| `title` | `蓝牙耳机批发 无线耳机` |
+| `price_min` | `12.50` |
+| `price_max` | `18.00` |
+| `currency` | `CNY` |
+| `moq` | `50` |
+| `image_url` | `https://cbu01.alicdn.com/img/....jpg` |
+| `supplier_name` | `深圳市XX电子有限公司` |
+| `supplier_province` | `广东` |
+| `detail_url` | `https://detail.1688.com/offer/123456789.html` |
+| `raw` | JSON gốc trả về từ Apify actor |
+
+---
+
+## 7. crawl4ai-service — hạ tầng crawl HTML → Markdown
 
 - Không phải service nghiệp vụ, mà là **tool nội bộ** dùng chung: nhận một URL, trả về nội dung trang dạng Markdown sạch (loại bỏ nav/footer/script).
 - Được `product-extractor-service` gọi qua HTTP nội bộ; xem client tại [`pkg/crawl4ai`](../pkg/crawl4ai).
@@ -185,6 +223,7 @@ curl -X POST localhost:8891/api/niche/sessions \
 | trend-service | Google Trends | SerpApi | `trend_raw` |
 | fb-ads-service | Facebook Ads Library | Apify | `fbads_raw` |
 | amazon-service | Amazon product | Apify | `amazon_raw` |
+| china1688-service | 1688 wholesale product | Apify | `china1688_raw` |
 | product-extractor-service | Landing page của ad Facebook | crawl4ai-service + OpenRouter LLM | `products` |
 | niche-research-service | Google Trends (theo nhiều quốc gia) | SerpApi + OpenRouter LLM | `niche_sessions` |
 | ai-service | (không crawl) tóm tắt insight từ `trend_raw`/`fbads_raw` | OpenRouter LLM | `ai_results` |

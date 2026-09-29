@@ -11,8 +11,12 @@ A small e-commerce trend-crawling platform built as four Go microservices:
 - **amazon-service** — a gRPC service backed by a RabbitMQ worker that
   fetches Amazon product data (search by keyword or crawl specific product
   URLs/ASINs) via an Apify actor and persists it.
+- **china1688-service** — a gRPC service backed by a RabbitMQ worker that
+  fetches 1688 wholesale product data (search by keyword or specific offer
+  IDs) via the `zen-studio/1688-wholesale-scraper` Apify actor and persists
+  it.
 - **api-gateway** — a REST API (go-zero) that lets clients create trend,
-  fbads, or amazon jobs and poll their status/results.
+  fbads, amazon, or china1688 jobs and poll their status/results.
 
 The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
@@ -55,6 +59,8 @@ Two crawl paths are exposed by `api-gateway`:
 - `POST /jobs/fbads` — `{"query": "nike", "country": "US"}` — `GET /jobs/fbads/{id}`
 - `POST /jobs/amazon` — `{"keyword": "wireless earbuds", "country": "US"}` or
   `{"urls": ["https://www.amazon.com/dp/B0..."]}` — `GET /jobs/amazon/{id}`
+- `POST /jobs/china1688` — `{"keywords": ["蓝牙耳机"]}` or
+  `{"offer_ids": ["123456789"]}` — `GET /jobs/china1688/{id}`
 
 ## Prerequisites
 
@@ -82,7 +88,7 @@ from [openrouter.ai](https://openrouter.ai), and an Apify token from
 from the repo root and uses it to fill in the
 `SERPAPI_API_KEY`/`OPENROUTER_API_KEY`/`APIFY_API_TOKEN` environment
 variables passed into the `trend-service`, `ai-service`, `fb-ads-service`,
-and `amazon-service` containers.
+`amazon-service`, and `china1688-service` containers.
 
 ## Run
 

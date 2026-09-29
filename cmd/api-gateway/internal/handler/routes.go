@@ -26,6 +26,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodPost,
+				Path:    "/jobs/china1688",
+				Handler: CreateChina1688JobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/china1688/:id",
+				Handler: GetChina1688JobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
 				Path:    "/jobs/fbads",
 				Handler: CreateFbAdsJobHandler(serverCtx),
 			},
