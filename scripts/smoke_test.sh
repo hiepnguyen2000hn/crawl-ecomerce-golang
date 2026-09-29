@@ -48,8 +48,12 @@ case "$PATH_TYPE" in
     ENDPOINT="jobs/china1688"
     BODY="{\"keywords\":[\"${KEYWORD}\"]}"
     ;;
+  reddit)
+    ENDPOINT="jobs/reddit"
+    BODY="{\"keyword\":\"${KEYWORD}\"}"
+    ;;
   *)
-    echo "Unknown --path: $PATH_TYPE (expected 'trend', 'fbads', 'amazon', or 'china1688')" >&2
+    echo "Unknown --path: $PATH_TYPE (expected 'trend', 'fbads', 'amazon', 'china1688', or 'reddit')" >&2
     exit 1
     ;;
 esac

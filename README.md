@@ -15,8 +15,12 @@ A small e-commerce trend-crawling platform built as four Go microservices:
   fetches 1688 wholesale product data (search by keyword or specific offer
   IDs) via the `zen-studio/1688-wholesale-scraper` Apify actor and persists
   it.
+- **reddit-service** — a gRPC service backed by a RabbitMQ worker that
+  searches Reddit for the top 3 posts matching a keyword and fetches each
+  post's top 100 comments by score, via the `harshmaur/reddit-scraper`
+  Apify actor, and persists both.
 - **api-gateway** — a REST API (go-zero) that lets clients create trend,
-  fbads, amazon, or china1688 jobs and poll their status/results.
+  fbads, amazon, china1688, or reddit jobs and poll their status/results.
 
 The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
@@ -61,6 +65,7 @@ Two crawl paths are exposed by `api-gateway`:
   `{"urls": ["https://www.amazon.com/dp/B0..."]}` — `GET /jobs/amazon/{id}`
 - `POST /jobs/china1688` — `{"keywords": ["蓝牙耳机"]}` or
   `{"offer_ids": ["123456789"]}` — `GET /jobs/china1688/{id}`
+- `POST /jobs/reddit` — `{"keyword": "wireless earbuds"}` — `GET /jobs/reddit/{id}`
 
 ## Prerequisites
 
@@ -88,7 +93,7 @@ from [openrouter.ai](https://openrouter.ai), and an Apify token from
 from the repo root and uses it to fill in the
 `SERPAPI_API_KEY`/`OPENROUTER_API_KEY`/`APIFY_API_TOKEN` environment
 variables passed into the `trend-service`, `ai-service`, `fb-ads-service`,
-`amazon-service`, and `china1688-service` containers.
+`amazon-service`, `china1688-service`, and `reddit-service` containers.
 
 ## Run
 

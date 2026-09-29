@@ -157,6 +157,23 @@ services:
     ports:
       - "8086:8086"
 
+  reddit-service:
+    build:
+      context: .
+      dockerfile: cmd/reddit-service/Dockerfile
+    environment:
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure:5
+    ports:
+      - "8087:8087"
+
   api-gateway:
     build:
       context: .
@@ -173,6 +190,8 @@ services:
       amazon-service:
         condition: service_started
       china1688-service:
+        condition: service_started
+      reddit-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully

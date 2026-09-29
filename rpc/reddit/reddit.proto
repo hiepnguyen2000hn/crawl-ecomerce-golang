@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package reddit;
+option go_package = "./reddit";
+
+message GetRedditJobRequest {
+  string job_id = 1;
+}
+
+message GetRedditJobResponse {
+  string status = 1;
+  int32 post_count = 2;
+  int32 comment_count = 3;
+  string ai_output = 4;
+}
+
+service RedditService {
+  rpc GetRedditJob(GetRedditJobRequest) returns (GetRedditJobResponse);
+}

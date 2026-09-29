@@ -14,3 +14,5 @@ AmazonRpc:
   Target: amazon-service:8085
 China1688Rpc:
   Target: china1688-service:8086
+RedditRpc:
+  Target: reddit-service:8087

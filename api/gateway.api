@@ -89,6 +89,25 @@ type GetChina1688JobResponse {
 	AiOutput     string `json:"ai_output"`
 }
 
+type CreateRedditJobRequest {
+	Keyword string `json:"keyword"`
+}
+
+type CreateRedditJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetRedditJobRequest {
+	Id string `path:"id"`
+}
+
+type GetRedditJobResponse {
+	Status       string `json:"status"`
+	PostCount    int32  `json:"post_count"`
+	CommentCount int32  `json:"comment_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -113,5 +132,11 @@ service gateway-api {
 
 	@handler GetChina1688Job
 	get /jobs/china1688/:id (GetChina1688JobRequest) returns (GetChina1688JobResponse)
+
+	@handler CreateRedditJob
+	post /jobs/reddit (CreateRedditJobRequest) returns (CreateRedditJobResponse)
+
+	@handler GetRedditJob
+	get /jobs/reddit/:id (GetRedditJobRequest) returns (GetRedditJobResponse)
 }
 

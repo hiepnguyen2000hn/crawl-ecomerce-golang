@@ -26,4 +26,7 @@ type Config struct {
 	China1688Rpc struct {
 		Target string
 	}
+	RedditRpc struct {
+		Target string
+	}
 }

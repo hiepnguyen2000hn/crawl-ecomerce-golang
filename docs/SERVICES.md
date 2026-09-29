@@ -209,7 +209,45 @@ curl -X POST localhost:8888/jobs/china1688 \
 
 ---
 
-## 7. crawl4ai-service — hạ tầng crawl HTML → Markdown
+## 7. reddit-service — Reddit Post & Top Comments
+
+- **Crawl gì:** tìm theo **từ khoá**, lấy **top 3 bài viết** (sort theo score), và với mỗi bài lấy **100 comment có upvote cao nhất**.
+- **Tool/API dùng:** Apify actor [`harshmaur/reddit-scraper`](https://apify.com/harshmaur/reddit-scraper) — client riêng tại [`pkg/apify/reddit.go`](../pkg/apify/reddit.go).
+- **Cơ chế:** `api-gateway` → RabbitMQ → `reddit-service` (gRPC + worker, proto tại [`rpc/reddit`](../rpc/reddit)) gọi Apify **1 lần duy nhất** (search + crawl comment của cả 3 post trong cùng 1 run actor, buffer comment gấp 3 lần cần thiết) → tự sort theo `score` giảm dần ở code và cắt lấy top 100/post trước khi lưu — actor không đảm bảo thứ tự trả về đã sort theo score.
+- **Bảng lưu:** `reddit_posts_raw` + `reddit_comments_raw` (`db/migrations/000007_reddit.up.sql`).
+- **Request mẫu:**
+
+```sh
+curl -X POST localhost:8888/jobs/reddit \
+  -d '{"keyword": "wireless earbuds"}'
+```
+
+- **Dữ liệu mẫu (1 row trong `reddit_posts_raw`):**
+
+| cột | giá trị mẫu |
+|---|---|
+| `post_id` | `t3_tq4ctx` |
+| `title` | `Wired earphones are superior to wireless headphones` |
+| `url` | `https://www.reddit.com/r/unpopularopinion/comments/tq4ctx/...` |
+| `community_name` | `r/unpopularopinion` |
+| `upvotes` | `33688` |
+| `num_comments` | `3110` |
+| `raw` | JSON gốc trả về từ Apify actor |
+
+- **Dữ liệu mẫu (1 row trong `reddit_comments_raw`):**
+
+| cột | giá trị mẫu |
+|---|---|
+| `post_id` | `t3_tq4ctx` |
+| `comment_id` | `i2eycpn` |
+| `username` | `glxssz` |
+| `body` | `True. I have very curly hair and somehow wireless ones get caught in it...` |
+| `upvotes` | `3476` |
+| `raw` | JSON gốc trả về từ Apify actor |
+
+---
+
+## 8. crawl4ai-service — hạ tầng crawl HTML → Markdown
 
 - Không phải service nghiệp vụ, mà là **tool nội bộ** dùng chung: nhận một URL, trả về nội dung trang dạng Markdown sạch (loại bỏ nav/footer/script).
 - Được `product-extractor-service` gọi qua HTTP nội bộ; xem client tại [`pkg/crawl4ai`](../pkg/crawl4ai).
@@ -224,6 +262,7 @@ curl -X POST localhost:8888/jobs/china1688 \
 | fb-ads-service | Facebook Ads Library | Apify | `fbads_raw` |
 | amazon-service | Amazon product | Apify | `amazon_raw` |
 | china1688-service | 1688 wholesale product | Apify | `china1688_raw` |
+| reddit-service | Reddit post + top comments | Apify | `reddit_posts_raw`, `reddit_comments_raw` |
 | product-extractor-service | Landing page của ad Facebook | crawl4ai-service + OpenRouter LLM | `products` |
 | niche-research-service | Google Trends (theo nhiều quốc gia) | SerpApi + OpenRouter LLM | `niche_sessions` |
 | ai-service | (không crawl) tóm tắt insight từ `trend_raw`/`fbads_raw` | OpenRouter LLM | `ai_results` |
