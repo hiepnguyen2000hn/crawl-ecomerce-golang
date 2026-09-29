@@ -50,6 +50,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: CreateRedditJobHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/jobs/reddit-api",
+				Handler: CreateRedditApiJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/reddit-api/:id",
+				Handler: GetRedditApiJobHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/jobs/reddit/:id",
 				Handler: GetRedditJobHandler(serverCtx),

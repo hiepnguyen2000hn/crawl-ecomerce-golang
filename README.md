@@ -19,8 +19,14 @@ A small e-commerce trend-crawling platform built as four Go microservices:
   searches Reddit for the top 3 posts matching a keyword and fetches each
   post's top 100 comments by score, via the `harshmaur/reddit-scraper`
   Apify actor, and persists both.
+- **reddit-api-service** — the same job (top 3 posts + top 100 comments per
+  post) as reddit-service, but calling Reddit's own OAuth API directly
+  (`client_credentials` app-only grant) instead of Apify — free of Apify's
+  per-result billing, at the cost of owning the OAuth/rate-limit handling.
+  Writes to the same `reddit_posts_raw`/`reddit_comments_raw` tables.
 - **api-gateway** — a REST API (go-zero) that lets clients create trend,
-  fbads, amazon, china1688, or reddit jobs and poll their status/results.
+  fbads, amazon, china1688, reddit, or reddit-api jobs and poll their
+  status/results.
 
 The services communicate through Postgres (job/result storage) and RabbitMQ
 (job queue and completion events). See the full design spec at
@@ -66,6 +72,9 @@ Two crawl paths are exposed by `api-gateway`:
 - `POST /jobs/china1688` — `{"keywords": ["蓝牙耳机"]}` or
   `{"offer_ids": ["123456789"]}` — `GET /jobs/china1688/{id}`
 - `POST /jobs/reddit` — `{"keyword": "wireless earbuds"}` — `GET /jobs/reddit/{id}`
+  (Apify-backed)
+- `POST /jobs/reddit-api` — `{"keyword": "wireless earbuds"}` — `GET /jobs/reddit-api/{id}`
+  (same job, via Reddit's own free OAuth API instead of Apify)
 
 ## Prerequisites
 
@@ -85,15 +94,21 @@ Edit `.env` and set:
 SERPAPI_API_KEY=your-serpapi-key
 OPENROUTER_API_KEY=your-openrouter-key
 APIFY_API_TOKEN=your-apify-token
+REDDIT_CLIENT_ID=your-reddit-app-client-id
+REDDIT_CLIENT_SECRET=your-reddit-app-client-secret
+REDDIT_USER_AGENT=crawl-ecomerce-golang/1.0 by <your-reddit-username>
 ```
 
 Get a SerpApi key from [serpapi.com](https://serpapi.com), an OpenRouter key
 from [openrouter.ai](https://openrouter.ai), and an Apify token from
-[apify.com](https://apify.com). Docker Compose automatically loads `.env`
-from the repo root and uses it to fill in the
-`SERPAPI_API_KEY`/`OPENROUTER_API_KEY`/`APIFY_API_TOKEN` environment
+[apify.com](https://apify.com). Get a Reddit client ID/secret by creating a
+"script" app at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps)
+(only needed for `reddit-api-service`; any redirect URI works since it uses
+the app-only `client_credentials` grant). Docker Compose automatically
+loads `.env` from the repo root and uses it to fill in the environment
 variables passed into the `trend-service`, `ai-service`, `fb-ads-service`,
-`amazon-service`, `china1688-service`, and `reddit-service` containers.
+`amazon-service`, `china1688-service`, `reddit-service`, and
+`reddit-api-service` containers.
 
 ## Run
 

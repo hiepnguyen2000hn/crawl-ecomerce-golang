@@ -43,6 +43,14 @@ type CreateFbAdsJobResponse struct {
 	JobId string `json:"job_id"`
 }
 
+type CreateRedditApiJobRequest struct {
+	Keyword string `json:"keyword"`
+}
+
+type CreateRedditApiJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
 type CreateRedditJobRequest struct {
 	Keyword string `json:"keyword"`
 }
@@ -88,6 +96,17 @@ type GetFbAdsJobResponse struct {
 	Status   string `json:"status"`
 	AdCount  int32  `json:"ad_count"`
 	AiOutput string `json:"ai_output"`
+}
+
+type GetRedditApiJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetRedditApiJobResponse struct {
+	Status       string `json:"status"`
+	PostCount    int32  `json:"post_count"`
+	CommentCount int32  `json:"comment_count"`
+	AiOutput     string `json:"ai_output"`
 }
 
 type GetRedditJobRequest struct {

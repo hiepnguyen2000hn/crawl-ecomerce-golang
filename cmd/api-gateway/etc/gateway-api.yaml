@@ -16,3 +16,5 @@ China1688Rpc:
   Target: 127.0.0.1:8086
 RedditRpc:
   Target: 127.0.0.1:8087
+RedditApiRpc:
+  Target: 127.0.0.1:8088

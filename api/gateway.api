@@ -108,6 +108,25 @@ type GetRedditJobResponse {
 	AiOutput     string `json:"ai_output"`
 }
 
+type CreateRedditApiJobRequest {
+	Keyword string `json:"keyword"`
+}
+
+type CreateRedditApiJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetRedditApiJobRequest {
+	Id string `path:"id"`
+}
+
+type GetRedditApiJobResponse {
+	Status       string `json:"status"`
+	PostCount    int32  `json:"post_count"`
+	CommentCount int32  `json:"comment_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -138,5 +157,11 @@ service gateway-api {
 
 	@handler GetRedditJob
 	get /jobs/reddit/:id (GetRedditJobRequest) returns (GetRedditJobResponse)
+
+	@handler CreateRedditApiJob
+	post /jobs/reddit-api (CreateRedditApiJobRequest) returns (CreateRedditApiJobResponse)
+
+	@handler GetRedditApiJob
+	get /jobs/reddit-api/:id (GetRedditApiJobRequest) returns (GetRedditApiJobResponse)
 }
 

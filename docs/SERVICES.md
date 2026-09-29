@@ -245,9 +245,28 @@ curl -X POST localhost:8888/jobs/reddit \
 | `upvotes` | `3476` |
 | `raw` | JSON gốc trả về từ Apify actor |
 
+- **Chi phí:** dùng Apify actor tính phí theo kết quả (pay-per-result). Job thật (3 post + buffer 300 comment/post để đảm bảo sort đúng) tốn khoảng **$1.6/lần chạy** — xem thêm [reddit-api-service](#8-reddit-api-service--reddit-post--top-comments-qua-oauth-mi%E1%BB%85n-ph%C3%AD) nếu cần phương án miễn phí.
+
 ---
 
-## 8. crawl4ai-service — hạ tầng crawl HTML → Markdown
+## 8. reddit-api-service — Reddit Post & Top Comments qua OAuth (miễn phí)
+
+- **Crawl gì:** giống hệt `reddit-service` (top 3 bài theo từ khoá + top 100 comment/bài theo upvote), nhưng gọi thẳng **Reddit API chính thức** thay vì Apify.
+- **Tool/API dùng:** Reddit OAuth API (`oauth.reddit.com`), xác thực bằng grant `client_credentials` (app-only, không cần đăng nhập tài khoản Reddit) — client tại [`pkg/redditapi`](../pkg/redditapi).
+- **Cơ chế:** `api-gateway` → RabbitMQ (`reddit-api.jobs`) → `reddit-api-service` (gRPC + worker, proto tại [`rpc/redditapi`](../rpc/redditapi)) gọi `GET /search` để lấy top post, rồi `GET /comments/{id}` cho từng post (kèm flatten đệ quy các reply lồng nhau), tự sort theo `score` giảm dần và cắt top 100 — **không giới hạn buffer vì API này miễn phí**, không tính phí theo kết quả như Apify.
+- **Giới hạn:** endpoint `/comments` không tự "load more" cho các nhánh reply bị Reddit ẩn dưới node `more` — comment ẩn sâu trong thread rất dài (nghìn comment) có thể bị bỏ qua. Rate limit ~100 request/phút/app (đủ dùng, mỗi job chỉ tốn 4 request).
+- **Bảng lưu:** dùng chung `reddit_posts_raw` + `reddit_comments_raw` với `reddit-service` (phân biệt qua `jobs.type = 'reddit_api'`).
+- **Cấu hình:** cần `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` (tạo app loại "script" tại [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps)) và `REDDIT_USER_AGENT`.
+- **Request mẫu:**
+
+```sh
+curl -X POST localhost:8888/jobs/reddit-api \
+  -d '{"keyword": "wireless earbuds"}'
+```
+
+---
+
+## 9. crawl4ai-service — hạ tầng crawl HTML → Markdown
 
 - Không phải service nghiệp vụ, mà là **tool nội bộ** dùng chung: nhận một URL, trả về nội dung trang dạng Markdown sạch (loại bỏ nav/footer/script).
 - Được `product-extractor-service` gọi qua HTTP nội bộ; xem client tại [`pkg/crawl4ai`](../pkg/crawl4ai).
@@ -263,6 +282,7 @@ curl -X POST localhost:8888/jobs/reddit \
 | amazon-service | Amazon product | Apify | `amazon_raw` |
 | china1688-service | 1688 wholesale product | Apify | `china1688_raw` |
 | reddit-service | Reddit post + top comments | Apify | `reddit_posts_raw`, `reddit_comments_raw` |
+| reddit-api-service | Reddit post + top comments | Reddit OAuth API (miễn phí) | `reddit_posts_raw`, `reddit_comments_raw` |
 | product-extractor-service | Landing page của ad Facebook | crawl4ai-service + OpenRouter LLM | `products` |
 | niche-research-service | Google Trends (theo nhiều quốc gia) | SerpApi + OpenRouter LLM | `niche_sessions` |
 | ai-service | (không crawl) tóm tắt insight từ `trend_raw`/`fbads_raw` | OpenRouter LLM | `ai_results` |

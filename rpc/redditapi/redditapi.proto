@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package redditapi;
+option go_package = "./redditapi";
+
+message GetRedditApiJobRequest {
+  string job_id = 1;
+}
+
+message GetRedditApiJobResponse {
+  string status = 1;
+  int32 post_count = 2;
+  int32 comment_count = 3;
+  string ai_output = 4;
+}
+
+service RedditApiService {
+  rpc GetRedditApiJob(GetRedditApiJobRequest) returns (GetRedditApiJobResponse);
+}

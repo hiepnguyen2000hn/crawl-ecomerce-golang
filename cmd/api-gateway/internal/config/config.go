@@ -29,4 +29,7 @@ type Config struct {
 	RedditRpc struct {
 		Target string
 	}
+	RedditApiRpc struct {
+		Target string
+	}
 }

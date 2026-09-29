@@ -10,6 +10,7 @@ import (
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/china1688-service/china1688"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/fbads"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/reddit-api-service/redditapi"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/reddit-service/reddit"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/trend-service/trend"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/db"
@@ -27,6 +28,7 @@ type ServiceContext struct {
 	AmazonRpc    amazon.AmazonServiceClient
 	China1688Rpc china1688.China1688ServiceClient
 	RedditRpc    reddit.RedditServiceClient
+	RedditApiRpc redditapi.RedditApiServiceClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -58,6 +60,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+	redditApiGrpcConn, err := grpc.NewClient(c.RedditApiRpc.Target, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
 	return &ServiceContext{
 		Config:       c,
 		DB:           conn,
@@ -67,5 +73,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		AmazonRpc:    amazon.NewAmazonServiceClient(amazonGrpcConn),
 		China1688Rpc: china1688.NewChina1688ServiceClient(china1688GrpcConn),
 		RedditRpc:    reddit.NewRedditServiceClient(redditGrpcConn),
+		RedditApiRpc: redditapi.NewRedditApiServiceClient(redditApiGrpcConn),
 	}
 }

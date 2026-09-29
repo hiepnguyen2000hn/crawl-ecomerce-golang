@@ -1,0 +1,13 @@
+Name: reddit-api-service
+ListenOn: 0.0.0.0:8088
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+Reddit:
+  ClientID: ${REDDIT_CLIENT_ID}
+  ClientSecret: ${REDDIT_CLIENT_SECRET}
+  UserAgent: ${REDDIT_USER_AGENT}
+  AuthURL: https://www.reddit.com
+  ApiURL: https://oauth.reddit.com
