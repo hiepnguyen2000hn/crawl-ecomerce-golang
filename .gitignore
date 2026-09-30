@@ -3,3 +3,6 @@ bin/
 .env
 .venv/
 __pycache__/
+
+# superpowers plan workspaces (scratch, not part of the repo)
+.superpowers/
