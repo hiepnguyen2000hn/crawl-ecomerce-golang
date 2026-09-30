@@ -1151,11 +1151,11 @@ function nichePutReal(real) {
   return session;
 }
 
-addRoute("GET", "/api/niche/sessions", async () => {
-  const res = await fetch(`${NICHE_API_BASE}/api/niche/sessions`);
-  if (!res.ok) throw new Error(`niche-research-service: ${res.status}`);
-  const real = await res.json();
-  return real.map(nichePutReal);
+addRoute("GET", "/api/niche/sessions", () => {
+  return prRegistryList().map((m) => ({
+    id: m.id, raw_keyword: m.raw_keyword, country_codes: m.country_codes,
+    status: m.last_status, progress: m.last_status === "done" ? 100 : 0,
+  }));
 });
 
 addRoute("POST", "/api/niche/sessions", async ({ body }) => {
@@ -1165,32 +1165,42 @@ addRoute("POST", "/api/niche/sessions", async ({ body }) => {
   if (!body.country_codes || !body.country_codes.length) {
     throw new Error("Chọn ít nhất 1 thị trường");
   }
-  const res = await fetch(`${NICHE_API_BASE}/api/niche/sessions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ raw_keyword: body.raw_keyword.trim(), country_codes: body.country_codes }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `niche-research-service: ${res.status}`);
-  }
-  return nichePutReal(await res.json());
+  const jobId = uid("pr");
+  const raw_keyword = body.raw_keyword.trim();
+  await prStartRun({ jobId, keyword: raw_keyword, countryCodes: body.country_codes });
+  prRegistrySave({ id: jobId, raw_keyword, country_codes: body.country_codes, created_at: Date.now(), last_status: "running" });
+  return { id: jobId, raw_keyword, country_codes: body.country_codes, status: "running", progress: 0 };
 });
 
-addRoute("GET", "/api/niche/sessions/([^/]+)", ({ params }) => nicheFindSession(params[0]));
+addRoute("GET", "/api/niche/sessions/([^/]+)", async ({ params }) => {
+  const id = params[0];
+  const meta = prRegistryGet(id) || { id, raw_keyword: "", country_codes: [] };
+  const cached = prGetCachedUi(id);
+  if (cached && meta.last_status === "done") return { ...cached.session, id, country_codes: meta.country_codes };
+  const job = await prPollJob(id);
+  const status = PR_STATUS_MAP[job.status] || "running";
+  prRegistrySave({ ...meta, last_status: status });
+  if (status === "done") {
+    prCacheUi(id, job.result.ui);
+    return { ...job.result.ui.session, id, country_codes: meta.country_codes };
+  }
+  if (status === "error") {
+    return { id, raw_keyword: meta.raw_keyword, country_codes: meta.country_codes, status: "error", progress: 0, message: (job.error && job.error.message) || "Job thất bại" };
+  }
+  return { id, raw_keyword: meta.raw_keyword, country_codes: meta.country_codes, status: "running", progress: 0 };
+});
 
 addRoute("DELETE", "/api/niche/sessions/([^/]+)", ({ params }) => {
-  const idx = NICHE_SESSIONS.findIndex((x) => x.id === params[0]);
-  if (idx === -1) throw new Error("Không tìm thấy phiên nghiên cứu ngách");
-  NICHE_SESSIONS.splice(idx, 1);
-  delete NICHE_PRODUCTS[params[0]]; delete NICHE_KEYWORDS[params[0]];
-  delete NICHE_AUDIENCE[params[0]]; delete NICHE_SEGMENTS[params[0]];
+  if (!prRegistryGet(params[0])) throw new Error("Không tìm thấy phiên nghiên cứu ngách");
+  prRegistryRemove(params[0]);
+  delete prReportCache[params[0]];
   return { ok: true };
 });
 
-addRoute("POST", "/api/niche/sessions/([^/]+)/run", ({ params }) => {
-  const s = nicheFindSession(params[0]);
-  return nicheRunStep1(s);
+addRoute("POST", "/api/niche/sessions/([^/]+)/run", async ({ params }) => {
+  const meta = prRegistryGet(params[0]);
+  if (!meta) throw new Error("Không tìm thấy phiên nghiên cứu ngách");
+  return { id: params[0], raw_keyword: meta.raw_keyword, country_codes: meta.country_codes, status: meta.last_status || "running", progress: meta.last_status === "done" ? 100 : 0 };
 });
 
 /* ---- Vùng 1 — tệp đối tượng & targeting ---- */
