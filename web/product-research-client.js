@@ -25,3 +25,30 @@ async function prPollJob(jobId) {
   if (!res.ok) throw new Error(`product-research: ${res.status}`);
   return envelope.data;
 }
+
+const PR_REGISTRY_KEY = "pr_sessions_v1";
+
+function prRegistryList() {
+  try { return JSON.parse(localStorage.getItem(PR_REGISTRY_KEY) || "[]"); }
+  catch { return []; }
+}
+function prRegistrySave(meta) {
+  const list = prRegistryList().filter((m) => m.id !== meta.id);
+  list.unshift(meta);
+  localStorage.setItem(PR_REGISTRY_KEY, JSON.stringify(list));
+}
+function prRegistryRemove(id) {
+  localStorage.setItem(PR_REGISTRY_KEY, JSON.stringify(prRegistryList().filter((m) => m.id !== id)));
+}
+function prRegistryGet(id) {
+  return prRegistryList().find((m) => m.id === id);
+}
+
+const prReportCache = {};
+const prProductIndex = {};
+function prCacheUi(jobId, uiBlock) {
+  prReportCache[jobId] = uiBlock;
+  (uiBlock.products || []).forEach((p) => { prProductIndex[String(p.id)] = jobId; });
+}
+function prGetCachedUi(jobId) { return prReportCache[jobId]; }
+function prFindJobIdForProduct(productId) { return prProductIndex[String(productId)]; }
