@@ -1,7 +1,7 @@
 /* product-research-client.js — HTTP client for levelup_ai's product_research pipeline.
    See docs/superpowers/plans/2026-09-30-niche-product-research-integration.md */
 
-const PR_API_BASE = "http://localhost:3009";
+const PR_API_BASE = window.APP_CONFIG.PR_API_BASE;
 
 const PR_STATUS_MAP = {
   QUEUED: "running", RUNNING: "running",

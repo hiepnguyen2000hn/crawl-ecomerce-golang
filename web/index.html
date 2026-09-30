@@ -59,6 +59,8 @@
       presets: [[Babel.availablePresets['react'], { runtime: 'classic' }]],
     });
   </script>
+  <!-- config nạp trước tất cả: định nghĩa window.APP_CONFIG cho NICHE_API_BASE/PR_API_BASE -->
+  <script src="config.js"></script>
   <!-- i18n nạp đầu tiên: bọc React.createElement để dịch UI sang EN khi user chọn -->
   <script src="i18n.js"></script>
   <script src="product-research-client.js"></script>

@@ -1143,11 +1143,11 @@ function nicheRecomputeQuote(p, session) {
 /* ---- Meta & danh sách phiên ---- */
 addRoute("GET", "/api/niche/meta", () => NICHE_META);
 
-/* Step 1 (list + create/run) đã ghép API thật (cmd/niche-research-service).
-   Các endpoint step2-4/audience/targeting/... vẫn mock — nichePutReal() điền
-   đủ field mặc định "draft" cho các phần đó để trang chi tiết không vỡ khi
-   mở 1 session đến từ backend thật. Đổi NICHE_API_BASE khi deploy nơi khác. */
-const NICHE_API_BASE = "http://localhost:8084";
+/* Vòng đời session (list/create/poll/delete/run) đã ghép product_research /runs (levelup_ai) —
+   xem docs/superpowers/plans/2026-09-30-niche-product-research-integration.md. Các endpoint
+   step2-4/audience/targeting/... vẫn mock. NICHE_API_BASE giờ chỉ còn dùng cho phần code cũ chưa
+   dọn (xem nichePutReal, hiện không route nào gọi tới) — đổi trong config.js, không sửa ở đây. */
+const NICHE_API_BASE = window.APP_CONFIG.NICHE_API_BASE;
 
 function nichePutReal(real) {
   const existing = NICHE_SESSIONS.find((x) => x.id === real.id);
