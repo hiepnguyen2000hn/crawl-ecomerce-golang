@@ -1,2 +1,3 @@
-playwright==1.*
+cloakbrowser
 qrcode[pil]==7.*
+python-dotenv==1.*

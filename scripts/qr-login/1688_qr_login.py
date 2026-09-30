@@ -21,25 +21,28 @@ Output:
     ./1688_qr.png            - QR you scan with the Taobao/1688 app
     ./1688_session.json      - storage_state, written only after login succeeds
 """
+import os
 import sys
 import time
 
 import qrcode
-from playwright.sync_api import sync_playwright
+from cloakbrowser import launch
+from dotenv import load_dotenv
+
+load_dotenv()
 
 HOME_URL = "https://www.1688.com/"
 POLL_TIMEOUT_SECONDS = 120
+HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower() not in ("0", "false", "no")
+HUMANIZE = os.getenv("CLOAKBROWSER_HUMANIZE", "true").strip().lower() not in ("0", "false", "no")
+PROXY = os.getenv("CLOAKBROWSER_PROXY") or None
 
 
 def main() -> int:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+    browser = launch(headless=HEADLESS, humanize=HUMANIZE, proxy=PROXY)
+    try:
         context = browser.new_context(
             viewport={"width": 1280, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
             locale="zh-CN",
         )
         page = context.new_page()
@@ -99,11 +102,9 @@ def main() -> int:
             box = login_link.bounding_box(timeout=5000)
         except Exception as e:
             print(f"[!] Could not locate login link — site markup may have changed: {e}", file=sys.stderr)
-            browser.close()
             return 1
         if box is None:
             print("[!] Login link has no bounding box (not visible).", file=sys.stderr)
-            browser.close()
             return 1
 
         cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
@@ -118,7 +119,6 @@ def main() -> int:
 
         if state["code_content"] is None:
             print("[!] Never received codeContent — page structure may have changed.", file=sys.stderr)
-            browser.close()
             return 1
 
         img = qrcode.make(state["code_content"])
@@ -132,7 +132,6 @@ def main() -> int:
 
         if not state["logged_in"]:
             print(f"[!] Timed out after {POLL_TIMEOUT_SECONDS}s without confirmation.", file=sys.stderr)
-            browser.close()
             return 1
 
         print("[+] Login confirmed. Waiting a moment for redirect/cookies to settle...", file=sys.stderr)
@@ -141,7 +140,7 @@ def main() -> int:
         context.storage_state(path="1688_session.json")
         print("Saved session: 1688_session.json", file=sys.stderr)
         print("Final URL:", page.url, file=sys.stderr)
-
+    finally:
         browser.close()
     return 0
 

@@ -22,25 +22,28 @@ Output:
     ./taobao_session.json      - storage_state, written only after login succeeds
 """
 import json
+import os
 import sys
 import time
 
 import qrcode
-from playwright.sync_api import sync_playwright
+from cloakbrowser import launch
+from dotenv import load_dotenv
+
+load_dotenv()
 
 LOGIN_URL = "https://login.taobao.com/havanaone/login/login.htm?bizName=taobao"
 POLL_TIMEOUT_SECONDS = 120  # Taobao QR tokens are typically valid ~3 min
+HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower() not in ("0", "false", "no")
+HUMANIZE = os.getenv("CLOAKBROWSER_HUMANIZE", "true").strip().lower() not in ("0", "false", "no")
+PROXY = os.getenv("CLOAKBROWSER_PROXY") or None
 
 
 def main() -> int:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+    browser = launch(headless=HEADLESS, humanize=HUMANIZE, proxy=PROXY)
+    try:
         context = browser.new_context(
             viewport={"width": 1280, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
             locale="zh-CN",
         )
         page = context.new_page()
@@ -89,7 +92,6 @@ def main() -> int:
 
         if state["code_content"] is None:
             print("[!] Never received codeContent — page structure may have changed.", file=sys.stderr)
-            browser.close()
             return 1
 
         # Render our own QR from the raw string — no canvas/taint involved.
@@ -106,7 +108,6 @@ def main() -> int:
 
         if not state["logged_in"]:
             print(f"[!] Timed out after {POLL_TIMEOUT_SECONDS}s without confirmation.", file=sys.stderr)
-            browser.close()
             return 1
 
         print("[+] Login confirmed. Waiting a moment for redirect/cookies to settle...", file=sys.stderr)
@@ -115,7 +116,7 @@ def main() -> int:
         context.storage_state(path="taobao_session.json")
         print("Saved session: taobao_session.json", file=sys.stderr)
         print("Final URL:", page.url, file=sys.stderr)
-
+    finally:
         browser.close()
     return 0
 
