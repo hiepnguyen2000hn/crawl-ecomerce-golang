@@ -999,8 +999,25 @@ function nicheEnsureAudience(sessionId) {
    ==================================================================== */
 function nicheFindSession(id) {
   const s = NICHE_SESSIONS.find((x) => x.id === id);
-  if (!s) throw new Error("Không tìm thấy phiên nghiên cứu ngách");
-  return s;
+  if (s) return s;
+  // Phiên thật (product-research /runs) không còn được mirror vào NICHE_SESSIONS — các route
+  // Vùng 1/2/3/4 chưa ghép API thật (targeting, step2-4, sourcing...) vẫn cần 1 object hợp lệ để
+  // không throw khi mở phiên thật, dù chỉ trả rỗng/draft thay vì mock đầy đủ như trước.
+  const meta = prRegistryGet(id);
+  if (meta) {
+    return {
+      id: meta.id, raw_keyword: meta.raw_keyword, country_codes: meta.country_codes,
+      status: meta.last_status || "running",
+      step2_status: "draft", step2_progress: 0, step2_stage: null, step2_message: null, step2_score: null,
+      last_step2_at: null, ads_source: null, ecom_source: null,
+      step3_status: "draft", step3_progress: 0, step3_stage: null, step3_message: null, step3_score: null,
+      last_step3_at: null, price_source: null, benchmark_source: null,
+      step4_status: "draft", step4_progress: 0, step4_stage: null, step4_message: null, step4_score: null,
+      last_step4_at: null, warehouse: null, target_moq: null,
+      cogs_share: null, ads_share: null, message: null,
+    };
+  }
+  throw new Error("Không tìm thấy phiên nghiên cứu ngách");
 }
 function nicheRunStep1(session) {
   session.status = "done"; session.progress = 100; session.stage = "Hoàn tất"; session.message = null;
