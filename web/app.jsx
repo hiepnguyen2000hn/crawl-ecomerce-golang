@@ -1262,41 +1262,20 @@ addRoute("DELETE", "/api/niche/sessions/([^/]+)/targeting/([^/]+)", ({ params })
 });
 
 /* ---- Vùng 2 — sản phẩm tiềm năng ---- */
-addRoute("GET", "/api/niche/sessions/([^/]+)/products", ({ params, query }) => {
-  const s = nicheFindSession(params[0]);
-  const products = nicheEnsureProducts(s.id);
-  const includeFiltered = query.include_filtered === "true" || query.include_filtered === true;
-  const list = includeFiltered ? products : products.filter((p) => p.ad_status === "valid" || !p.ad_status);
-  return { products: list.slice().sort((a, b) => a.rank - b.rank) };
+addRoute("GET", "/api/niche/sessions/([^/]+)/products", ({ params }) => {
+  const ui = prGetCachedUi(params[0]);
+  return { products: (ui && ui.products) || [] };
 });
 
 addRoute("GET", "/api/niche/sessions/([^/]+)/sources", ({ params }) => {
-  const s = nicheFindSession(params[0]);
-  const products = nicheEnsureProducts(s.id);
-  const ads = products.filter((p) => p.ads_count).map((p, i) => adItem(
-    `ad_${p.id}`, p.name, `${p.name.split(" ").slice(0, 2).join(" ")} Store`,
-    i % 2 ? "Facebook" : "Facebook + Instagram", p.matched_keyword, p.ads_active_days,
-    p.ad_reach, p.pricing_note || p.pain_points, `cl_${p.id}`, p.ad_status));
-  const ecom = products.filter((p) => p.ecom_platform).map((p) => ecomItem(
-    `ec_${p.id}`, p.name, p.ecom_platform, p.rating, p.reviews_count, p.sales_volume,
-    p.price, p.currency, p.matched_keyword, `cl_${p.id}`, true, "#"));
-  return { ads, ecom };
+  const ui = prGetCachedUi(params[0]);
+  return (ui && ui.sources) || { ads: [], ecom: [] };
 });
 
 addRoute("GET", "/api/niche/products/([^/]+)/members", ({ params }) => {
-  const id = params[0];
-  let found = null;
-  Object.values(NICHE_PRODUCTS).forEach((list) => {
-    const p = list.find((x) => x.id === id);
-    if (p) found = p;
-  });
-  if (!found) return { ads: [], ecom: [] };
-  const ads = found.ads_count ? [adItem(`m_ad_${id}`, found.name, "Trang demo", "Facebook",
-    found.matched_keyword, found.ads_active_days, found.ad_reach, found.pain_points, `cl_${id}`, found.ad_status)] : [];
-  const ecom = found.ecom_platform ? [ecomItem(`m_ec_${id}`, found.name, found.ecom_platform,
-    found.rating, found.reviews_count, found.sales_volume, found.price, found.currency,
-    found.matched_keyword, `cl_${id}`, true, "#")] : [];
-  return { ads, ecom };
+  const jobId = prFindJobIdForProduct(params[0]);
+  const ui = jobId && prGetCachedUi(jobId);
+  return (ui && ui.members && ui.members[params[0]]) || { ads: [], ecom: [] };
 });
 
 addRoute("POST", "/api/niche/sessions/([^/]+)/step2/run", ({ params }) => {
@@ -1328,9 +1307,8 @@ addRoute("POST", "/api/niche/sessions/([^/]+)/step3/run", ({ params }) => {
 });
 
 addRoute("GET", "/api/niche/sessions/([^/]+)/pricing", ({ params }) => {
-  const s = nicheFindSession(params[0]);
-  const products = nicheEnsureProducts(s.id).filter((p) => p.shortlisted);
-  return { products };
+  const ui = prGetCachedUi(params[0]);
+  return { products: (ui && ui.pricing && ui.pricing.products) || [] };
 });
 
 /* ---- Vùng 4 — nguồn hàng & báo giá ---- */
@@ -1378,10 +1356,8 @@ addRoute("GET", "/api/niche/sessions/([^/]+)/sourcing", ({ params }) => {
 
 /* ---- Vùng 4 (tổng hợp) & hồ sơ ngách ---- */
 addRoute("GET", "/api/niche/sessions/([^/]+)/summary", ({ params }) => {
-  const s = nicheFindSession(params[0]);
-  const products = nicheEnsureProducts(s.id);
-  products.forEach((p) => nicheBuildSummary(s, p));
-  return { products: products.slice().sort((a, b) => (b.total_score || 0) - (a.total_score || 0)) };
+  const ui = prGetCachedUi(params[0]);
+  return { products: (ui && ui.summary && ui.summary.products) || [] };
 });
 
 addRoute("POST", "/api/niche/sessions/([^/]+)/summarize", ({ params }) => {
@@ -1392,12 +1368,8 @@ addRoute("POST", "/api/niche/sessions/([^/]+)/summarize", ({ params }) => {
 });
 
 addRoute("GET", "/api/niche/sessions/([^/]+)/profile", ({ params }) => {
-  const s = nicheFindSession(params[0]);
-  return {
-    keywords: nicheEnsureKeywords(s.id),
-    audience: nicheEnsureAudience(s.id),
-    segments: nicheEnsureSegments(s.id),
-  };
+  const ui = prGetCachedUi(params[0]);
+  return (ui && ui.profile) || { keywords: [], audience: [], segments: {} };
 });
 /* ===================================================================
    MOCK API — Benchmark & Sản phẩm tiềm năng (window.BenchmarkPage)
