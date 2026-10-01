@@ -13,7 +13,7 @@ import (
 
 const (
 	maxPosts    = 3
-	maxComments = 100
+	maxComments = 10
 )
 
 type JobMessage struct {
