@@ -113,6 +113,12 @@ func (c *Consumer) Consume(ctx context.Context, queue, routingKey string, handle
 	if err := DeclareTopology(c.ch, c.cfg.Exchange, queue, routingKey, ".dlq"); err != nil {
 		return err
 	}
+	// Prefetch 1: handler xử lý tuần tự nên mỗi consumer chỉ giữ 1 message chưa ack. Khi chạy
+	// nhiều bản sao worker cùng nghe 1 queue, message tiếp theo đi tới bản sao đang rảnh thay vì
+	// bị đẩy trước vào hàng chờ của bản sao đang bận (mặc định không giới hạn prefetch).
+	if err := c.ch.Qos(1, 0, false); err != nil {
+		return fmt.Errorf("rabbitmq: qos: %w", err)
+	}
 	msgs, err := c.ch.Consume(queue, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("rabbitmq: consume: %w", err)

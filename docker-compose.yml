@@ -49,8 +49,11 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    ports:
-      - "8081:8081"
+    # Không map cổng ra host để chạy được nhiều bản sao; gateway gọi gRPC qua mạng nội bộ.
+    expose:
+      - "8081"
+    deploy:
+      replicas: ${TREND_REPLICAS:-2}
     restart: on-failure:5
 
   ai-service:
@@ -82,12 +85,18 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: on-failure:5
-    ports:
-      - "8082:8082"
+    # Mỗi bản sao chạy 1 actor Apify một lúc (run-sync) → nhiều bản sao = nhiều query FB song song.
+    # Không map cổng ra host (trùng cổng khi scale); gateway gọi gRPC qua mạng nội bộ.
+    expose:
+      - "8082"
+    deploy:
+      replicas: ${FBADS_REPLICAS:-8}
 
   crawl4ai-service:
     build:
       context: ./crawl4ai-service
+    deploy:
+      replicas: ${CRAWL4AI_REPLICAS:-2}
     restart: on-failure:5
 
   product-extractor-service:
@@ -105,6 +114,10 @@ services:
         condition: service_completed_successfully
       crawl4ai-service:
         condition: service_started
+    # Mỗi bản sao xử lý 1 job fbads một lúc, trong job bóc song song `Concurrency` URL (mặc định 4).
+    # Model OpenRouter `:free` giới hạn request/phút — tăng bản sao thì nên đổi sang model trả phí.
+    deploy:
+      replicas: ${EXTRACTOR_REPLICAS:-4}
     restart: on-failure:5
 
   niche-research-service:
@@ -137,8 +150,10 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: on-failure:5
-    ports:
-      - "8085:8085"
+    expose:
+      - "8085"
+    deploy:
+      replicas: ${AMAZON_REPLICAS:-2}
 
   china1688-service:
     build:

@@ -286,3 +286,25 @@ curl -X POST localhost:8888/jobs/reddit-api \
 | product-extractor-service | Landing page của ad Facebook | crawl4ai-service + OpenRouter LLM | `products` |
 | niche-research-service | Google Trends (theo nhiều quốc gia) | SerpApi + OpenRouter LLM | `niche_sessions` |
 | ai-service | (không crawl) tóm tắt insight từ `trend_raw`/`fbads_raw` | OpenRouter LLM | `ai_results` |
+
+---
+
+## Chạy song song (scale worker)
+
+Mỗi worker xử lý **1 message một lúc** (handler chạy tuần tự, `Qos(1)`). Muốn nhiều job chạy cùng lúc thì **tăng số bản sao**,
+RabbitMQ sẽ chia message cho bản sao đang rảnh. Số bản sao chỉnh qua biến môi trường của `docker compose`:
+
+| Biến | Mặc định | Service |
+|---|---|---|
+| `FBADS_REPLICAS` | 8 | fb-ads-service — mỗi bản sao chạy 1 actor Apify (run-sync) |
+| `EXTRACTOR_REPLICAS` | 4 | product-extractor-service — trong 1 job bóc song song 4 URL (`Concurrency`), trần 90s/URL (`URLTimeoutSec`) |
+| `CRAWL4AI_REPLICAS` | 2 | crawl4ai-service |
+| `AMAZON_REPLICAS` | 2 | amazon-service |
+| `TREND_REPLICAS` | 2 | trend-service |
+
+- fb-ads / amazon / trend **không còn map cổng gRPC ra host** (8081/8082/8085) để scale được; gateway gọi qua mạng nội bộ docker.
+- Số actor Apify chạy đồng thời bị giới hạn theo RAM của gói tài khoản Apify.
+- Extractor dùng model OpenRouter `:free` có giới hạn request/phút: nhiều bản sao × `Concurrency` dễ bị 429 → URL bị bỏ qua.
+  Chạy song song nhiều thì nên đổi `OpenRouter.Model` trong `etc/extractor*.yaml` sang model trả phí.
+- `jobs.products_done_at` (migration `000009`): extractor ghi khi đã xử lý xong mọi URL của job fbads; service research đọc cột này
+  để biết sản phẩm trang đích đã đủ.
