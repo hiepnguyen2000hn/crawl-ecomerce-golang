@@ -69,7 +69,7 @@ type amazonCategoryOrProductURL struct {
 // and the per-URL item cap is maxItemsPerStartUrl.
 type amazonRunInput struct {
 	CategoryOrProductURLs []amazonCategoryOrProductURL `json:"categoryOrProductUrls"`
-	MaxItemsPerStartURL   int                           `json:"maxItemsPerStartUrl,omitempty"`
+	MaxItemsPerStartURL   int                          `json:"maxItemsPerStartUrl,omitempty"`
 }
 
 type amazonPrice struct {
@@ -101,6 +101,11 @@ var amazonDomains = map[string]string{
 	"ES": "amazon.es",
 	"JP": "amazon.co.jp",
 	"IN": "amazon.in",
+	"NL": "amazon.nl",
+	"PL": "amazon.pl",
+	"SE": "amazon.se",
+	"BE": "amazon.com.be",
+	"TR": "amazon.com.tr",
 }
 
 func (c *AmazonHTTPClient) FetchProducts(ctx context.Context, params ProductParams) (ProductsResult, error) {
