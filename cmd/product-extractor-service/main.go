@@ -35,6 +35,9 @@ type Config struct {
 	Crawl4ai struct {
 		BaseURL string
 	}
+	// Số URL bóc song song trong 1 job và trần thời gian mỗi URL (giây). 0 → mặc định của worker.
+	Concurrency   int `json:",optional"`
+	URLTimeoutSec int `json:",optional"`
 }
 
 var configFile = flag.String("f", "etc/extractor.yaml", "config file")
@@ -54,7 +57,8 @@ func main() {
 		panic(err)
 	}
 
-	provider := aiproviders.NewOpenRouter(c.OpenRouter.ApiKey, c.OpenRouter.Model, c.OpenRouter.BaseURL, http.DefaultClient, c.OpenRouter.FallbackModels...)
+	// Timeout riêng cho LLM: http.DefaultClient không có timeout, model free có lúc treo không trả.
+	provider := aiproviders.NewOpenRouter(c.OpenRouter.ApiKey, c.OpenRouter.Model, c.OpenRouter.BaseURL, &http.Client{Timeout: 60 * time.Second}, c.OpenRouter.FallbackModels...)
 	crawler := crawl4ai.NewHTTPClient(c.Crawl4ai.BaseURL, &http.Client{Timeout: 2 * time.Minute}) // crawl4ai pages can be slow
 
 	consumer, err := rabbitmq.NewConsumer(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})
@@ -62,7 +66,10 @@ func main() {
 		panic(err)
 	}
 
-	w := &worker.Consumer{DB: conn, Crawler: crawler, Provider: provider}
+	w := &worker.Consumer{
+		DB: conn, Crawler: crawler, Provider: provider,
+		Concurrency: c.Concurrency, URLTimeout: time.Duration(c.URLTimeoutSec) * time.Second,
+	}
 	fmt.Println("Starting product-extractor-service consumer...")
 	if err := consumer.Consume(context.Background(), "product-extractor.fbads.completed", "crawl.completed.fbads", w.HandleMessage); err != nil {
 		fmt.Fprintln(os.Stderr, "product-extractor-service consumer stopped:", err)

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/aiproviders"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/crawl4ai"
@@ -58,7 +60,22 @@ type Consumer struct {
 	DB       *sql.DB
 	Crawler  crawl4ai.Client
 	Provider aiproviders.Provider
+	// Concurrency = số URL của 1 job được crawl+extract cùng lúc. <= 0 → defaultConcurrency.
+	Concurrency int
+	// URLTimeout chặn trần crawl4ai + LLM cho MỖI URL, để 1 trang/1 lời gọi treo không giữ cả job.
+	// <= 0 → defaultURLTimeout.
+	URLTimeout time.Duration
 }
+
+type urlAd struct {
+	URL  string
+	AdID string
+}
+
+const (
+	defaultConcurrency = 4
+	defaultURLTimeout  = 90 * time.Second
+)
 
 func (c *Consumer) HandleMessage(body []byte) error {
 	var msg CompletedMessage
@@ -76,10 +93,6 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: load distinct link_urls: %w", err)
 	}
 
-	type urlAd struct {
-		URL  string
-		AdID string
-	}
 	var urls []urlAd
 	for rows.Next() {
 		var u urlAd
@@ -94,10 +107,45 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: iterate link_url rows: %w", err)
 	}
 
-	for _, u := range urls {
-		c.extractOne(ctx, msg.JobID, u.AdID, u.URL)
+	c.extractAll(ctx, msg.JobID, urls)
+
+	// Báo cho bên đọc dữ liệu (service research) biết products của job này đã đủ. Lỗi ở đây
+	// chỉ log: trả error sẽ khiến message bị xử lý lại và trích trùng sản phẩm; bên đọc có
+	// timeout riêng.
+	if _, err := c.DB.ExecContext(ctx,
+		`UPDATE jobs SET products_done_at = now() WHERE id = $1`, msg.JobID,
+	); err != nil {
+		fmt.Println("worker: failed to mark products_done_at for", msg.JobID, ":", err)
 	}
 	return nil
+}
+
+// extractAll chạy extractOne cho mọi URL, tối đa c.Concurrency URL cùng lúc, mỗi URL có
+// trần thời gian riêng. Trước đây các URL chạy tuần tự (crawl4ai + LLM mỗi URL) nên job có
+// 10–15 trang đích mất vài phút và là đường găng của service research.
+func (c *Consumer) extractAll(ctx context.Context, jobID string, urls []urlAd) {
+	limit := c.Concurrency
+	if limit <= 0 {
+		limit = defaultConcurrency
+	}
+	timeout := c.URLTimeout
+	if timeout <= 0 {
+		timeout = defaultURLTimeout
+	}
+	sem := make(chan struct{}, limit)
+	var wg sync.WaitGroup
+	for _, u := range urls {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(u urlAd) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			uctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			c.extractOne(uctx, jobID, u.AdID, u.URL)
+		}(u)
+	}
+	wg.Wait()
 }
 
 // extractOne handles a single URL's crawl+extract+save. Any failure is
