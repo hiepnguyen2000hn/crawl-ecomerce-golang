@@ -1,0 +1,4 @@
+username,password,proxy
+crawler01,CHANGE_ME,http://user:pass@host1:port
+crawler02,CHANGE_ME,http://user:pass@host2:port
+crawler03,CHANGE_ME,

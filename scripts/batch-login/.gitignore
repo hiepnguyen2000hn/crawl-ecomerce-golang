@@ -1,0 +1,7 @@
+.venv/
+accounts.csv
+sessions/
+batch_login_output.json
+.env
+!.env.example
+!.env.microsoft-smoketest.example
