@@ -1,12 +1,9 @@
 package apify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 )
 
@@ -31,6 +28,9 @@ type ProductParams struct {
 	URLs     []string
 	Country  string
 	MaxItems int
+	// JobID is recorded on the concurrency lease so a stuck slot can be
+	// traced back to the job holding it.
+	JobID string
 }
 
 type ProductsResult struct {
@@ -41,21 +41,20 @@ type ProductClient interface {
 	FetchProducts(ctx context.Context, params ProductParams) (ProductsResult, error)
 }
 
+// AmazonHTTPClient maps the Amazon crawler actor onto Product. The HTTP
+// call, token selection and concurrency slot all live in Runner; what stays
+// here is specific to this actor -- its input shape, its item shape, and the
+// mapping to our domain type.
 type AmazonHTTPClient struct {
-	apiToken   string
-	actorID    string
-	baseURL    string
-	httpClient *http.Client
+	actorID string
+	runner  *Runner
 }
 
-func NewAmazonHTTPClient(apiToken, actorID, baseURL string, httpClient *http.Client) *AmazonHTTPClient {
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+func NewAmazonHTTPClient(actorID string, runner *Runner) *AmazonHTTPClient {
 	if actorID == "" {
 		actorID = "junglee~amazon-crawler"
 	}
-	return &AmazonHTTPClient{apiToken: apiToken, actorID: actorID, baseURL: baseURL, httpClient: httpClient}
+	return &AmazonHTTPClient{actorID: actorID, runner: runner}
 }
 
 type amazonCategoryOrProductURL struct {
@@ -69,7 +68,7 @@ type amazonCategoryOrProductURL struct {
 // and the per-URL item cap is maxItemsPerStartUrl.
 type amazonRunInput struct {
 	CategoryOrProductURLs []amazonCategoryOrProductURL `json:"categoryOrProductUrls"`
-	MaxItemsPerStartURL   int                           `json:"maxItemsPerStartUrl,omitempty"`
+	MaxItemsPerStartURL   int                          `json:"maxItemsPerStartUrl,omitempty"`
 }
 
 type amazonPrice struct {
@@ -123,33 +122,11 @@ func (c *AmazonHTTPClient) FetchProducts(ctx context.Context, params ProductPara
 	if len(input.CategoryOrProductURLs) == 0 {
 		return ProductsResult{}, fmt.Errorf("apify: either keyword or urls is required")
 	}
-	payload, err := json.Marshal(input)
+	rawItems, err := c.runner.RunSync(ctx, c.actorID, params.JobID, input)
 	if err != nil {
-		return ProductsResult{}, fmt.Errorf("apify: marshal input: %w", err)
+		return ProductsResult{}, err
 	}
-
-	q := url.Values{}
-	q.Set("token", c.apiToken)
-	reqURL := fmt.Sprintf("%s/acts/%s/run-sync-get-dataset-items?%s", c.baseURL, c.actorID, q.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
-	if err != nil {
-		return ProductsResult{}, fmt.Errorf("apify: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return ProductsResult{}, fmt.Errorf("apify: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return ProductsResult{}, fmt.Errorf("apify: returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	items, rawItems, err := decodeAmazonItems(resp.Body)
+	items, err := DecodeItems[amazonProductItem](rawItems)
 	if err != nil {
 		return ProductsResult{}, err
 	}
@@ -170,25 +147,4 @@ func (c *AmazonHTTPClient) FetchProducts(ctx context.Context, params ProductPara
 		})
 	}
 	return ProductsResult{Products: products}, nil
-}
-
-// decodeAmazonItems reads the full response body, keeping each dataset
-// item's raw bytes (for the Product.Raw JSONB column) alongside its typed
-// decode.
-func decodeAmazonItems(body io.Reader) ([]amazonProductItem, []json.RawMessage, error) {
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("apify: read response body: %w", err)
-	}
-	var rawItems []json.RawMessage
-	if err := json.Unmarshal(data, &rawItems); err != nil {
-		return nil, nil, fmt.Errorf("apify: unmarshal raw items: %w", err)
-	}
-	items := make([]amazonProductItem, len(rawItems))
-	for i, raw := range rawItems {
-		if err := json.Unmarshal(raw, &items[i]); err != nil {
-			return nil, nil, fmt.Errorf("apify: unmarshal item %d: %w", i, err)
-		}
-	}
-	return items, rawItems, nil
 }

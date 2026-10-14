@@ -4,13 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/amazon"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/internal/server"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/internal/svc"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/internal/worker"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/apify"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/rabbitmq"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -28,8 +28,10 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c, conf.UseEnv())
 
-	if c.Apify.ApiToken == "" || strings.Contains(c.Apify.ApiToken, "${") {
-		panic("amazon-service: APIFY_API_TOKEN is not set")
+	// ParseTokens already discards blanks and the unexpanded "${...}"
+	// placeholder go-zero leaves behind when the env var is missing.
+	if len(apify.ParseTokens(c.Apify.ApiToken)) == 0 {
+		panic("amazon-service: APIFY_API_TOKEN is not set (one token, or several separated by commas)")
 	}
 
 	svcCtx := svc.NewServiceContext(c)
@@ -39,7 +41,11 @@ func main() {
 		panic(err)
 	}
 
-	consumer, err := rabbitmq.NewConsumer(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})
+	consumer, err := rabbitmq.NewConsumer(rabbitmq.Config{
+		URL:         c.RabbitMQ.URL,
+		Exchange:    c.RabbitMQ.Exchange,
+		Concurrency: c.RabbitMQ.Concurrency,
+	})
 	if err != nil {
 		panic(err)
 	}

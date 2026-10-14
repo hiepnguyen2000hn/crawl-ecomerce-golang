@@ -1,13 +1,9 @@
 package apify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 )
 
 // China1688Product is a normalized 1688 wholesale product record.
@@ -32,6 +28,9 @@ type China1688Params struct {
 	Keywords []string
 	OfferIDs []string
 	MaxItems int
+	// JobID is recorded on the concurrency lease so a stuck slot can be
+	// traced back to the job holding it.
+	JobID string
 }
 
 type China1688ProductsResult struct {
@@ -42,21 +41,19 @@ type China1688Client interface {
 	FetchProducts(ctx context.Context, params China1688Params) (China1688ProductsResult, error)
 }
 
+// China1688HTTPClient maps the 1688 wholesale actor onto China1688Product.
+// The HTTP call, token selection and concurrency slot all live in Runner;
+// what stays here is specific to this actor.
 type China1688HTTPClient struct {
-	apiToken   string
-	actorID    string
-	baseURL    string
-	httpClient *http.Client
+	actorID string
+	runner  *Runner
 }
 
-func NewChina1688HTTPClient(apiToken, actorID, baseURL string, httpClient *http.Client) *China1688HTTPClient {
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+func NewChina1688HTTPClient(actorID string, runner *Runner) *China1688HTTPClient {
 	if actorID == "" {
 		actorID = "zen-studio~1688-wholesale-scraper"
 	}
-	return &China1688HTTPClient{apiToken: apiToken, actorID: actorID, baseURL: baseURL, httpClient: httpClient}
+	return &China1688HTTPClient{actorID: actorID, runner: runner}
 }
 
 // china1688RunInput mirrors the zen-studio/1688-wholesale-scraper actor's
@@ -104,33 +101,11 @@ func (c *China1688HTTPClient) FetchProducts(ctx context.Context, params China168
 	if len(input.Keywords) == 0 && len(input.OfferIDs) == 0 {
 		return China1688ProductsResult{}, fmt.Errorf("apify: either keywords or offer_ids is required")
 	}
-	payload, err := json.Marshal(input)
+	rawItems, err := c.runner.RunSync(ctx, c.actorID, params.JobID, input)
 	if err != nil {
-		return China1688ProductsResult{}, fmt.Errorf("apify: marshal input: %w", err)
+		return China1688ProductsResult{}, err
 	}
-
-	q := url.Values{}
-	q.Set("token", c.apiToken)
-	reqURL := fmt.Sprintf("%s/acts/%s/run-sync-get-dataset-items?%s", c.baseURL, c.actorID, q.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
-	if err != nil {
-		return China1688ProductsResult{}, fmt.Errorf("apify: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return China1688ProductsResult{}, fmt.Errorf("apify: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return China1688ProductsResult{}, fmt.Errorf("apify: returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	items, rawItems, err := decodeChina1688Items(resp.Body)
+	items, err := DecodeItems[china1688ProductItem](rawItems)
 	if err != nil {
 		return China1688ProductsResult{}, err
 	}
@@ -159,25 +134,4 @@ func (c *China1688HTTPClient) FetchProducts(ctx context.Context, params China168
 		})
 	}
 	return China1688ProductsResult{Products: products}, nil
-}
-
-// decodeChina1688Items reads the full response body, keeping each dataset
-// item's raw bytes (for the China1688Product.Raw JSONB column) alongside its
-// typed decode.
-func decodeChina1688Items(body io.Reader) ([]china1688ProductItem, []json.RawMessage, error) {
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("apify: read response body: %w", err)
-	}
-	var rawItems []json.RawMessage
-	if err := json.Unmarshal(data, &rawItems); err != nil {
-		return nil, nil, fmt.Errorf("apify: unmarshal raw items: %w", err)
-	}
-	items := make([]china1688ProductItem, len(rawItems))
-	for i, raw := range rawItems {
-		if err := json.Unmarshal(raw, &items[i]); err != nil {
-			return nil, nil, fmt.Errorf("apify: unmarshal item %d: %w", i, err)
-		}
-	}
-	return items, rawItems, nil
 }

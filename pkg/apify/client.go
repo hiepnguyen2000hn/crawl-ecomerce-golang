@@ -1,13 +1,8 @@
 package apify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -43,6 +38,9 @@ type AdParams struct {
 	MaxItems     int
 	Advertisers  []string
 	FetchDetails bool
+	// JobID is recorded on the concurrency lease so a stuck slot can be
+	// traced back to the job holding it.
+	JobID string
 }
 
 type AdsResult struct {
@@ -53,21 +51,20 @@ type Client interface {
 	FetchAds(ctx context.Context, params AdParams) (AdsResult, error)
 }
 
+// HTTPClient maps the Facebook Ads Library actor onto Ad. The HTTP call,
+// token selection and concurrency slot all live in Runner; what stays here is
+// the part that is actually specific to this actor -- its input shape, its
+// item shape, and the mapping to our domain type.
 type HTTPClient struct {
-	apiToken   string
-	actorID    string
-	baseURL    string
-	httpClient *http.Client
+	actorID string
+	runner  *Runner
 }
 
-func NewHTTPClient(apiToken, actorID, baseURL string, httpClient *http.Client) *HTTPClient {
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+func NewHTTPClient(actorID string, runner *Runner) *HTTPClient {
 	if actorID == "" {
 		actorID = "igolaizola~facebook-ad-library-scraper"
 	}
-	return &HTTPClient{apiToken: apiToken, actorID: actorID, baseURL: baseURL, httpClient: httpClient}
+	return &HTTPClient{actorID: actorID, runner: runner}
 }
 
 type apifyRunInput struct {
@@ -124,32 +121,12 @@ func (c *HTTPClient) FetchAds(ctx context.Context, params AdParams) (AdsResult, 
 		Advertisers:  params.Advertisers,
 		FetchDetails: params.FetchDetails,
 	}
-	payload, err := json.Marshal(input)
+
+	rawItems, err := c.runner.RunSync(ctx, c.actorID, params.JobID, input)
 	if err != nil {
-		return AdsResult{}, fmt.Errorf("apify: marshal input: %w", err)
+		return AdsResult{}, err
 	}
-
-	q := url.Values{}
-	q.Set("token", c.apiToken)
-	reqURL := fmt.Sprintf("%s/acts/%s/run-sync-get-dataset-items?%s", c.baseURL, c.actorID, q.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
-	if err != nil {
-		return AdsResult{}, fmt.Errorf("apify: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return AdsResult{}, fmt.Errorf("apify: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return AdsResult{}, fmt.Errorf("apify: returned status %d", resp.StatusCode)
-	}
-
-	items, rawItems, err := decodeItems(resp.Body)
+	items, err := DecodeItems[apifyAdItem](rawItems)
 	if err != nil {
 		return AdsResult{}, err
 	}
@@ -183,24 +160,4 @@ func unixPtrToTime(sec *int64) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(*sec, 0).UTC()
-}
-
-// decodeItems reads the full response body, keeping each dataset item's
-// raw bytes (for the Ad.Raw JSONB column) alongside its typed decode.
-func decodeItems(body io.Reader) ([]apifyAdItem, []json.RawMessage, error) {
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("apify: read response body: %w", err)
-	}
-	var rawItems []json.RawMessage
-	if err := json.Unmarshal(data, &rawItems); err != nil {
-		return nil, nil, fmt.Errorf("apify: unmarshal raw items: %w", err)
-	}
-	items := make([]apifyAdItem, len(rawItems))
-	for i, raw := range rawItems {
-		if err := json.Unmarshal(raw, &items[i]); err != nil {
-			return nil, nil, fmt.Errorf("apify: unmarshal item %d: %w", i, err)
-		}
-	}
-	return items, rawItems, nil
 }

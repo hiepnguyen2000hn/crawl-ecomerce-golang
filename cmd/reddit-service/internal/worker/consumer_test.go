@@ -11,11 +11,13 @@ import (
 
 type fakeApify struct {
 	err     error
+	jobID   string
 	keyword string
 	result  apify.RedditSearchResult
 }
 
-func (f *fakeApify) SearchTopPostsWithComments(ctx context.Context, keyword string, maxPosts, maxCommentsPerPost int) (apify.RedditSearchResult, error) {
+func (f *fakeApify) SearchTopPostsWithComments(ctx context.Context, jobID, keyword string, maxPosts, maxCommentsPerPost int) (apify.RedditSearchResult, error) {
+	f.jobID = jobID
 	f.keyword = keyword
 	if f.err != nil {
 		return apify.RedditSearchResult{}, f.err

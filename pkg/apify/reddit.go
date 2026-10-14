@@ -1,13 +1,9 @@
 package apify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sort"
 )
 
@@ -45,24 +41,25 @@ type RedditClient interface {
 	// SearchTopPostsWithComments searches Reddit for keyword, returns the
 	// top maxPosts posts sorted by score, and for each post its top
 	// maxCommentsPerPost comments sorted by score descending.
-	SearchTopPostsWithComments(ctx context.Context, keyword string, maxPosts, maxCommentsPerPost int) (RedditSearchResult, error)
+	// jobID is recorded on the concurrency lease so a stuck slot can be
+	// traced back to the job holding it.
+	SearchTopPostsWithComments(ctx context.Context, jobID, keyword string, maxPosts, maxCommentsPerPost int) (RedditSearchResult, error)
 }
 
+// RedditHTTPClient maps the Reddit scraper actor onto posts and comments.
+// The HTTP call, token selection and concurrency slot all live in Runner;
+// what stays here is specific to this actor, including the local re-sorting
+// the actor's output requires.
 type RedditHTTPClient struct {
-	apiToken   string
-	actorID    string
-	baseURL    string
-	httpClient *http.Client
+	actorID string
+	runner  *Runner
 }
 
-func NewRedditHTTPClient(apiToken, actorID, baseURL string, httpClient *http.Client) *RedditHTTPClient {
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+func NewRedditHTTPClient(actorID string, runner *Runner) *RedditHTTPClient {
 	if actorID == "" {
 		actorID = "harshmaur~reddit-scraper"
 	}
-	return &RedditHTTPClient{apiToken: apiToken, actorID: actorID, baseURL: baseURL, httpClient: httpClient}
+	return &RedditHTTPClient{actorID: actorID, runner: runner}
 }
 
 // redditRunInput mirrors the harshmaur/reddit-scraper actor's input schema
@@ -95,7 +92,7 @@ type redditItem struct {
 	Raw              json.RawMessage `json:"-"`
 }
 
-func (c *RedditHTTPClient) SearchTopPostsWithComments(ctx context.Context, keyword string, maxPosts, maxCommentsPerPost int) (RedditSearchResult, error) {
+func (c *RedditHTTPClient) SearchTopPostsWithComments(ctx context.Context, jobID, keyword string, maxPosts, maxCommentsPerPost int) (RedditSearchResult, error) {
 	if keyword == "" {
 		return RedditSearchResult{}, fmt.Errorf("apify: keyword is required")
 	}
@@ -110,7 +107,7 @@ func (c *RedditHTTPClient) SearchTopPostsWithComments(ctx context.Context, keywo
 	// we re-sort locally per post and truncate to maxCommentsPerPost below.
 	fetchBuffer := maxCommentsPerPost * 3
 
-	payload, err := json.Marshal(redditRunInput{
+	rawItems, err := c.runner.RunSync(ctx, c.actorID, jobID, redditRunInput{
 		SearchTerms:          []string{keyword},
 		SearchPosts:          true,
 		SearchSort:           "top",
@@ -119,43 +116,11 @@ func (c *RedditHTTPClient) SearchTopPostsWithComments(ctx context.Context, keywo
 		MaxCommentsPerPost:   fetchBuffer,
 	})
 	if err != nil {
-		return RedditSearchResult{}, fmt.Errorf("apify: marshal input: %w", err)
+		return RedditSearchResult{}, err
 	}
-
-	q := url.Values{}
-	q.Set("token", c.apiToken)
-	reqURL := fmt.Sprintf("%s/acts/%s/run-sync-get-dataset-items?%s", c.baseURL, c.actorID, q.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
+	items, err := DecodeItems[redditItem](rawItems)
 	if err != nil {
-		return RedditSearchResult{}, fmt.Errorf("apify: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return RedditSearchResult{}, fmt.Errorf("apify: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return RedditSearchResult{}, fmt.Errorf("apify: returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return RedditSearchResult{}, fmt.Errorf("apify: read response body: %w", err)
-	}
-	var rawItems []json.RawMessage
-	if err := json.Unmarshal(data, &rawItems); err != nil {
-		return RedditSearchResult{}, fmt.Errorf("apify: unmarshal raw items: %w", err)
-	}
-	items := make([]redditItem, len(rawItems))
-	for i, raw := range rawItems {
-		if err := json.Unmarshal(raw, &items[i]); err != nil {
-			return RedditSearchResult{}, fmt.Errorf("apify: unmarshal item %d: %w", i, err)
-		}
+		return RedditSearchResult{}, err
 	}
 
 	var posts []RedditPost

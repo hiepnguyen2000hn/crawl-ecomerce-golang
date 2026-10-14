@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -50,6 +51,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 	defer cancel()
 
 	result, err := c.Apify.FetchAds(ctx, apify.AdParams{
+		JobID:        msg.JobID,
 		Query:        msg.Query,
 		PageID:       msg.PageID,
 		Country:      msg.Country,
@@ -63,6 +65,13 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		Advertisers:  msg.Advertisers,
 		FetchDetails: msg.FetchDetails,
 	})
+	var busy *apify.ErrBusy
+	if errors.As(err, &busy) {
+		// Every Apify account is at its concurrency limit. The job is fine;
+		// dead-lettering it here would throw away valid work just because the
+		// pool was briefly full, so put it back on the queue instead.
+		return fmt.Errorf("%w: %v", rabbitmq.ErrRequeue, err)
+	}
 	if err != nil {
 		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: fetch ads: %w", err)

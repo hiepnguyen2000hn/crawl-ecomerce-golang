@@ -1,8 +1,9 @@
 package svc
 
 import (
+	"context"
 	"database/sql"
-	"net/http"
+	"fmt"
 	"time"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/china1688-service/internal/config"
@@ -21,9 +22,18 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+
+	// Concurrency accounting lives in Postgres because every Apify-calling
+	// service is its own process sharing one token pool: a per-process
+	// semaphore would let four services each run the full per-account limit.
+	slots := apify.NewSlotStore(conn, apify.ParseTokens(c.Apify.ApiToken), "china1688-service", 6*time.Minute)
+	if err := slots.SyncTokens(context.Background(), c.Apify.MaxConcurrencyPerToken); err != nil {
+		panic(fmt.Errorf("china1688-service: register apify tokens: %w", err))
+	}
+
 	return &ServiceContext{
 		Config: c,
 		DB:     conn,
-		Apify:  apify.NewChina1688HTTPClient(c.Apify.ApiToken, c.Apify.ActorID, c.Apify.BaseURL, &http.Client{Timeout: 5 * time.Minute}),
+		Apify:  apify.NewChina1688HTTPClient(c.Apify.ActorID, apify.NewRunner(c.Apify.BaseURL, slots, 5*time.Minute)),
 	}
 }

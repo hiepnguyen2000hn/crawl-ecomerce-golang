@@ -5,7 +5,9 @@ Postgres:
 RabbitMQ:
   URL: amqp://guest:guest@localhost:5673/
   Exchange: crawl
+  Concurrency: 10
 Apify:
   ApiToken: ${APIFY_API_TOKEN}
   ActorID: harshmaur~reddit-scraper
   BaseURL: https://api.apify.com/v2
+  MaxConcurrencyPerToken: 5

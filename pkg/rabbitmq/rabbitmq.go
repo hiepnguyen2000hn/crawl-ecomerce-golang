@@ -2,16 +2,32 @@ package rabbitmq
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+// ErrRequeue marks a handler failure as "nothing wrong with this message,
+// try it again later" -- the message goes back on the queue instead of to the
+// dead-letter queue.
+//
+// Without it, transient backpressure (an external API at capacity) is
+// indistinguishable from a poison message, and a busy afternoon quietly
+// dead-letters a whole batch of perfectly valid jobs.
+var ErrRequeue = errors.New("rabbitmq: requeue this message")
 
 // Config holds the connection and topology settings shared by
 // Publisher and Consumer.
 type Config struct {
 	URL      string
 	Exchange string
+
+	// Concurrency is how many deliveries a Consumer handles in parallel.
+	// Zero or one keeps the original strictly-sequential behaviour, which is
+	// what every consumer that does not call a concurrency-limited API wants.
+	Concurrency int
 }
 
 func dlqName(queue, suffix string) string {
@@ -113,10 +129,26 @@ func (c *Consumer) Consume(ctx context.Context, queue, routingKey string, handle
 	if err := DeclareTopology(c.ch, c.cfg.Exchange, queue, routingKey, ".dlq"); err != nil {
 		return err
 	}
+
+	workers := c.cfg.Concurrency
+	if workers < 1 {
+		workers = 1
+	}
+	// Prefetch matches the worker count: fetching more would park messages in
+	// this process where no worker can reach them, stalling them behind this
+	// consumer while another instance sits idle.
+	if err := c.ch.Qos(workers, 0, false); err != nil {
+		return fmt.Errorf("rabbitmq: qos: %w", err)
+	}
+
 	msgs, err := c.ch.Consume(queue, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("rabbitmq: consume: %w", err)
 	}
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -125,14 +157,28 @@ func (c *Consumer) Consume(ctx context.Context, queue, routingKey string, handle
 			if !ok {
 				return fmt.Errorf("rabbitmq: delivery channel closed")
 			}
-			if err := handler(d.Body); err != nil {
-				fmt.Println("rabbitmq: handler error, nacking to DLQ:", err)
-				_ = d.Nack(false, false)
-				continue
-			}
-			_ = d.Ack(false)
+			wg.Add(1)
+			go func(d amqp.Delivery) {
+				defer wg.Done()
+				c.handle(d, handler)
+			}(d)
 		}
 	}
+}
+
+func (c *Consumer) handle(d amqp.Delivery, handler func([]byte) error) {
+	err := handler(d.Body)
+	if err == nil {
+		_ = d.Ack(false)
+		return
+	}
+	if errors.Is(err, ErrRequeue) {
+		fmt.Println("rabbitmq: handler asked to requeue:", err)
+		_ = d.Nack(false, true)
+		return
+	}
+	fmt.Println("rabbitmq: handler error, nacking to DLQ:", err)
+	_ = d.Nack(false, false)
 }
 
 func (c *Consumer) Close() error {

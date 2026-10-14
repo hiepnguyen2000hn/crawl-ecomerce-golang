@@ -4,9 +4,9 @@ package logic
 import (
 	"context"
 
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/amazon"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/svc"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/types"
-	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/amazon"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
