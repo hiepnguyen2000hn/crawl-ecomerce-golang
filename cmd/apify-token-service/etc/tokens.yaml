@@ -1,0 +1,13 @@
+ListenOn: 0.0.0.0:8089
+Postgres:
+  DSN: postgres://crawl:crawl@localhost:5433/crawl?sslmode=disable
+Apify:
+  ApiToken: ${APIFY_API_TOKEN}
+  BaseURL: https://api.apify.com/v2
+  DefaultMaxConcurrency: 5
+Refresh:
+  Interval: 1m
+  StaleAfter: 6h
+  BatchSize: 25
+  Concurrency: 5
+  ParkAbove: 0.95

@@ -193,6 +193,21 @@ services:
     ports:
       - "8088:8088"
 
+  apify-token-service:
+    build:
+      context: .
+      dockerfile: cmd/apify-token-service/Dockerfile
+    environment:
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8089:8089"
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .

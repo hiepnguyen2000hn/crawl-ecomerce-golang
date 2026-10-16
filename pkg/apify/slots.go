@@ -68,12 +68,17 @@ func NewSlotStore(db *sql.DB, tokens []string, service string, ttl time.Duration
 	}
 }
 
-// SyncTokens makes apify_tokens match the configured token list, so adding an
-// account is just appending to APIFY_API_TOKEN and restarting.
+// SyncTokens registers any configured token that is not in apify_tokens yet,
+// so adding an account is just appending to APIFY_API_TOKEN and restarting.
 //
-// Rows for tokens that disappeared are left in place rather than deleted:
-// their leases may still be live, and deleting would cascade those away and
-// under-count a still-running account.
+// Existing rows are left untouched. max_concurrency in particular is read
+// from Apify per account by the token service -- updating it from config here
+// would reset a paid account's real limit back to the free-plan guess every
+// time a service restarts.
+//
+// Rows for tokens that disappeared are also left in place: their leases may
+// still be live, and deleting would cascade those away and under-count a
+// still-running account.
 func (s *SlotStore) SyncTokens(ctx context.Context, maxConcurrency int) error {
 	if len(s.tokens) == 0 {
 		return errors.New("apify: no tokens configured")
@@ -85,7 +90,7 @@ func (s *SlotStore) SyncTokens(ctx context.Context, maxConcurrency int) error {
 		if _, err := s.db.ExecContext(ctx,
 			`INSERT INTO apify_tokens (token_index, label, max_concurrency)
 			 VALUES ($1, $2, $3)
-			 ON CONFLICT (token_index) DO UPDATE SET max_concurrency = EXCLUDED.max_concurrency`,
+			 ON CONFLICT (token_index) DO NOTHING`,
 			i, fmt.Sprintf("acct-%d", i+1), maxConcurrency,
 		); err != nil {
 			return fmt.Errorf("apify: sync token %d: %w", i, err)
@@ -100,27 +105,44 @@ WITH live AS (
       FROM apify_leases
      GROUP BY token_id
 ),
+-- Ordering, in priority: fewest runs in flight, then least budget spent, then
+-- at random. The last two matter more than they look. With 10 jobs against
+-- 1000 idle accounts every account ties on lease count, so a deterministic
+-- tie-break hands every job to the same lowest-id accounts -- measured: 60 of
+-- 1000 accounts touched, indexes 0..59, leaving 94% of the budget unreachable
+-- until the first ten burn out.
 pick AS (
-    SELECT t.id, t.token_index
+    SELECT t.id, t.token_index, t.secret
       FROM apify_tokens t
       LEFT JOIN live l ON l.token_id = t.id
      WHERE (t.exhausted_until IS NULL OR t.exhausted_until <= now())
        AND COALESCE(l.n, 0) < t.max_concurrency
-       AND t.token_index < $4
-     ORDER BY COALESCE(l.n, 0) ASC, t.id ASC
+       AND ($4::int IS NULL OR t.token_index < $4)
+     ORDER BY COALESCE(l.n, 0) ASC, t.usage_usd ASC NULLS FIRST, random()
      LIMIT 1
 )
 INSERT INTO apify_leases (token_id, actor_id, job_id, service, expires_at)
 SELECT id, $1, NULLIF($2, ''), $3, now() + make_interval(secs => $5)
   FROM pick
-RETURNING id, token_id, (SELECT token_index FROM pick)`
+RETURNING id, token_id,
+          (SELECT token_index FROM pick),
+          (SELECT secret FROM pick)`
+
+// tokenCeiling bounds which accounts this process may use.
+//
+// When tokens come from the env var, a row with a higher index than that list
+// has no secret this process can resolve and must be skipped. When the
+// registry owns the secrets the process holds no list, so NULL lifts the
+// bound entirely and every account is fair game.
+func (s *SlotStore) tokenCeiling() sql.NullInt32 {
+	if len(s.tokens) == 0 {
+		return sql.NullInt32{}
+	}
+	return sql.NullInt32{Int32: int32(len(s.tokens)), Valid: true}
+}
 
 // TryAcquire takes a slot if one is free right now, else returns ErrNoCapacity.
 func (s *SlotStore) TryAcquire(ctx context.Context, actorID, jobID string) (*Lease, error) {
-	if len(s.tokens) == 0 {
-		return nil, errors.New("apify: no tokens configured")
-	}
-
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("apify: begin acquire: %w", err)
@@ -138,9 +160,10 @@ func (s *SlotStore) TryAcquire(ctx context.Context, actorID, jobID string) (*Lea
 	}
 
 	var lease Lease
+	var dbSecret sql.NullString
 	err = tx.QueryRowContext(ctx, acquireSQL,
-		actorID, jobID, s.service, len(s.tokens), s.ttl.Seconds(),
-	).Scan(&lease.ID, &lease.TokenID, &lease.TokenIndex)
+		actorID, jobID, s.service, s.tokenCeiling(), s.ttl.Seconds(),
+	).Scan(&lease.ID, &lease.TokenID, &lease.TokenIndex, &dbSecret)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNoCapacity
 	}
@@ -148,10 +171,16 @@ func (s *SlotStore) TryAcquire(ctx context.Context, actorID, jobID string) (*Lea
 		return nil, fmt.Errorf("apify: acquire slot: %w", err)
 	}
 
-	if int(lease.TokenIndex) >= len(s.tokens) {
-		return nil, fmt.Errorf("apify: token_index %d out of range for %d configured tokens", lease.TokenIndex, len(s.tokens))
+	// The registry owns the secret. The env-seeded list is only a fallback
+	// for rows written before the registry existed.
+	switch {
+	case dbSecret.Valid && dbSecret.String != "":
+		lease.Token = dbSecret.String
+	case int(lease.TokenIndex) < len(s.tokens):
+		lease.Token = s.tokens[lease.TokenIndex]
+	default:
+		return nil, fmt.Errorf("apify: token_index %d has no secret in apify_tokens and no env fallback", lease.TokenIndex)
 	}
-	lease.Token = s.tokens[lease.TokenIndex]
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("apify: commit acquire: %w", err)

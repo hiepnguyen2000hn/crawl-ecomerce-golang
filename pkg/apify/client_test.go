@@ -5,8 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -96,11 +96,18 @@ func TestHTTPClient_FetchAds_SkipsExhaustedTokenOnTheNextJob(t *testing.T) {
 	// The old transport retried the *same* request on the next token. That is
 	// wrong under slot accounting: the retry would run on an account whose
 	// concurrency budget was never charged. Instead a credential failure
-	// parks the token, and the next job's Acquire simply does not pick it.
+	// parks the token, and later jobs' Acquire simply do not pick it.
+	//
+	// Which account a given job lands on is deliberately not deterministic --
+	// the allocator breaks ties at random so 10 jobs do not all pile onto the
+	// lowest-id accounts -- so this asserts the invariant rather than an order.
+	var mu sync.Mutex
 	var seen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
+		mu.Lock()
 		seen = append(seen, token)
+		mu.Unlock()
 		if token == "spent" {
 			w.WriteHeader(http.StatusPaymentRequired)
 			w.Write([]byte(`{"error":{"type":"monthly-usage-hard-limit-exceeded"}}`))
@@ -119,22 +126,34 @@ func TestHTTPClient_FetchAds_SkipsExhaustedTokenOnTheNextJob(t *testing.T) {
 	slots := newStore(t, db, []string{"spent", "funded"}, 5)
 	c := NewHTTPClient("igolaizola~facebook-ad-library-scraper", NewRunner(srv.URL, slots, time.Minute))
 
-	// First job lands on "spent" and fails -- that failure is real and the
-	// caller sees it, rather than being papered over by a hidden retry.
-	if _, err := c.FetchAds(context.Background(), AdParams{Query: "acme", MaxItems: 5}); err == nil {
-		t.Fatal("first FetchAds succeeded, want the 402 surfaced")
+	var spentHits, successes int
+	for i := 0; i < 6; i++ {
+		result, err := c.FetchAds(context.Background(), AdParams{Query: "acme", MaxItems: 5})
+		if err != nil {
+			spentHits++
+			continue
+		}
+		successes++
+		if len(result.Ads) != 1 {
+			t.Fatalf("job %d: len(Ads) = %d, want 1", i, len(result.Ads))
+		}
 	}
 
-	// Second job must avoid the parked token without being told.
-	result, err := c.FetchAds(context.Background(), AdParams{Query: "acme", MaxItems: 5})
-	if err != nil {
-		t.Fatalf("second FetchAds() error = %v, want it routed to the funded token", err)
+	// The spent account may be picked once. After that it is parked, so it
+	// must never be reached again no matter how many jobs run.
+	if spentHits > 1 {
+		t.Errorf("the spent account was used %d times, want at most 1 before it is parked", spentHits)
 	}
-	if len(result.Ads) != 1 {
-		t.Fatalf("len(Ads) = %d, want 1", len(result.Ads))
+	if successes == 0 {
+		t.Error("no job reached the funded account")
 	}
-	if want := []string{"spent", "funded"}; !reflect.DeepEqual(seen, want) {
-		t.Errorf("tokens used = %v, want %v (one attempt each, no same-request retry)", seen, want)
+
+	mu.Lock()
+	defer mu.Unlock()
+	for i, tok := range seen {
+		if tok == "spent" && i != 0 && seen[i-1] == "spent" {
+			t.Errorf("token sequence %v retried a parked account", seen)
+		}
 	}
 }
 

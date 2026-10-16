@@ -6,3 +6,6 @@ __pycache__/
 
 # superpowers plan workspaces (scratch, not part of the repo)
 .superpowers/
+
+# stray service binaries from `go build ./cmd/...`
+/apify-token-service
