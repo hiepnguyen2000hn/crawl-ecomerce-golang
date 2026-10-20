@@ -114,24 +114,31 @@ var exhaustionErrorTypes = map[string]bool{
 func classifyExhaustion(resp *http.Response) (bool, []byte) {
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
+	return isExhaustion(resp.StatusCode, body), body
+}
 
-	switch resp.StatusCode {
+// isExhaustion is classifyExhaustion's rule on its own, over a status and the
+// bytes of a body. Runner needs the same verdict to decide whether a failed
+// run is the job's fault or the wallet's, and it has already read the body by
+// then, so the rule cannot live inside a function that consumes a response.
+func isExhaustion(status int, body []byte) bool {
+	switch status {
 	case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
-		return true, body
+		return true
 	}
 	// A 400 is normally the caller's own bad input and must not park anyone,
 	// so only a known billing error.type counts.
-	if resp.StatusCode == http.StatusBadRequest {
+	if status == http.StatusBadRequest {
 		var payload struct {
 			Error struct {
 				Type string `json:"type"`
 			} `json:"error"`
 		}
 		if json.Unmarshal(body, &payload) == nil && exhaustionErrorTypes[payload.Error.Type] {
-			return true, body
+			return true
 		}
 	}
-	return false, body
+	return false
 }
 
 func withToken(req *http.Request, token string) *http.Request {

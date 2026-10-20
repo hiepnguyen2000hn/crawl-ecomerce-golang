@@ -46,12 +46,20 @@ func NewRunner(baseURL string, slots *SlotStore, runTimeout time.Duration) *Runn
 	}
 }
 
-// ErrBusy wraps a failure to get a slot before AcquireTimeout. Callers should
-// requeue on it rather than dead-letter: nothing is wrong with the job.
+// ErrBusy wraps a failure that says "not now", not "not ever": no slot came
+// free before AcquireTimeout, or the account that did answer has no budget
+// left. Callers should requeue on it rather than dead-letter -- nothing is
+// wrong with the job, and the next attempt lands on a token that still works.
 type ErrBusy struct{ Err error }
 
-func (e *ErrBusy) Error() string { return "apify: no slot available: " + e.Err.Error() }
+func (e *ErrBusy) Error() string { return "apify: cannot run right now: " + e.Err.Error() }
 func (e *ErrBusy) Unwrap() error { return e.Err }
+
+// exhaustionProbeBytes is how much of a failed response Runner reads. Apify's
+// billing errors put error.type in the first object, but a validation error
+// can precede it with a long schema dump, so this is well past the 512 bytes
+// the error message itself shows.
+const exhaustionProbeBytes = 8 << 10
 
 // RunSync runs an actor and returns its dataset items as raw JSON, one
 // element per item, so callers can both decode into their own type and keep
@@ -92,9 +100,24 @@ func (r *Runner) RunSync(ctx context.Context, actorID, jobID string, input any) 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// Include a snippet of the body: Apify explains input-schema
 		// rejections there, and a bare status number sends you to the
-		// dashboard to find out what you already had in hand.
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("apify: actor %s returned status %d: %s", actorID, resp.StatusCode, bytes.TrimSpace(snippet))
+		// dashboard to find out what you already had in hand. Read past the
+		// snippet length so a billing error.type near the end of a verbose
+		// body is still there to classify.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, exhaustionProbeBytes))
+		body = bytes.TrimSpace(body)
+		snippet := body
+		if len(snippet) > 512 {
+			snippet = snippet[:512]
+		}
+		err := fmt.Errorf("apify: actor %s returned status %d: %s", actorID, resp.StatusCode, snippet)
+		if isExhaustion(resp.StatusCode, body) {
+			// The account is out of budget, which says nothing about this
+			// job. The transport has already parked the token, so requeueing
+			// sends the job to a token that still has credit instead of
+			// dead-lettering perfectly valid work.
+			return nil, &ErrBusy{Err: err}
+		}
+		return nil, err
 	}
 
 	data, err := io.ReadAll(resp.Body)

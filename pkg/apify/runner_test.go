@@ -194,3 +194,92 @@ func TestRunSync_ReleasesSlotOnSuccess(t *testing.T) {
 		t.Errorf("%d lease(s) held after 3 clean runs, want 0", n)
 	}
 }
+
+func TestRunSync_ReturnsErrBusyWhenTheAccountIsOutOfBudget(t *testing.T) {
+	// A drained account is not a bad job: the consumer requeues on ErrBusy,
+	// so the next attempt lands on a token that still has credit instead of
+	// dead-lettering work that would have succeeded.
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"monthly hard limit", http.StatusForbidden, `{"error":{"type":"monthly-usage-hard-limit-exceeded","message":"Monthly usage hard limit exceeded"}}`},
+		{"no credits", http.StatusPaymentRequired, `{"error":{"type":"insufficient-credits"}}`},
+		{"billing error behind a 400", http.StatusBadRequest, `{"error":{"type":"max-items-must-be-greater-than-zero","message":"Maximum charged results must be greater than zero"}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			s := newStore(t, db, []string{"tok-a"}, 1)
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			r := NewRunner(srv.URL, s, time.Minute)
+			_, err := r.RunSync(context.Background(), "actor", "job-1", nil)
+
+			var busy *ErrBusy
+			if !errors.As(err, &busy) {
+				t.Fatalf("err = %v (%T), want *ErrBusy", err, err)
+			}
+			if !strings.Contains(err.Error(), tc.body[:30]) {
+				t.Errorf("err = %v, want Apify's own explanation included", err)
+			}
+			if n := liveLeases(t, db, 0); n != 0 {
+				t.Errorf("%d lease(s) still held, want 0", n)
+			}
+		})
+	}
+}
+
+func TestRunSync_BadInputIsStillAHardFailure(t *testing.T) {
+	// Only billing keeps a job alive. A 400 the job itself caused must go to
+	// the dead-letter queue, or a poison message requeues forever.
+	db := testDB(t)
+	s := newStore(t, db, []string{"tok-a"}, 1)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":{"type":"invalid-input","message":"field query is required"}}`))
+	}))
+	defer srv.Close()
+
+	r := NewRunner(srv.URL, s, time.Minute)
+	_, err := r.RunSync(context.Background(), "actor", "job-1", nil)
+	if err == nil {
+		t.Fatal("want an error on HTTP 400")
+	}
+	var busy *ErrBusy
+	if errors.As(err, &busy) {
+		t.Errorf("err = %v, want a hard failure, not ErrBusy", err)
+	}
+}
+
+func TestIsExhaustion(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   bool
+	}{
+		{"403 hard limit", http.StatusForbidden, `{"error":{"type":"monthly-usage-hard-limit-exceeded"}}`, true},
+		{"402 payment required", http.StatusPaymentRequired, `{}`, true},
+		{"401 bad token", http.StatusUnauthorized, `{}`, true},
+		{"400 billing type", http.StatusBadRequest, `{"error":{"type":"insufficient-credits"}}`, true},
+		{"400 bad input", http.StatusBadRequest, `{"error":{"type":"invalid-input"}}`, false},
+		{"429 is backpressure, not an empty wallet", http.StatusTooManyRequests, `{}`, false},
+		{"500 upstream fault", http.StatusInternalServerError, `{}`, false},
+		{"400 with an unparseable body", http.StatusBadRequest, `not json`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isExhaustion(tc.status, []byte(tc.body)); got != tc.want {
+				t.Errorf("isExhaustion(%d, %q) = %v, want %v", tc.status, tc.body, got, tc.want)
+			}
+		})
+	}
+}
