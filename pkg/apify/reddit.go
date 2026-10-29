@@ -70,6 +70,7 @@ type redditRunInput struct {
 	SearchComments       bool     `json:"searchComments,omitempty"`
 	SearchCommunities    bool     `json:"searchCommunities,omitempty"`
 	SearchSort           string   `json:"searchSort,omitempty"`
+	SearchTime           string   `json:"searchTime,omitempty"`
 	MaxPostsCount        int      `json:"maxPostsCount,omitempty"`
 	CrawlCommentsPerPost bool     `json:"crawlCommentsPerPost,omitempty"`
 	MaxCommentsPerPost   int      `json:"maxCommentsPerPost,omitempty"`
@@ -110,7 +111,8 @@ func (c *RedditHTTPClient) SearchTopPostsWithComments(ctx context.Context, jobID
 	rawItems, err := c.runner.RunSync(ctx, c.actorID, jobID, redditRunInput{
 		SearchTerms:          []string{keyword},
 		SearchPosts:          true,
-		SearchSort:           "top",
+		SearchSort:           "relevance",
+		SearchTime:           "year",
 		MaxPostsCount:        maxPosts,
 		CrawlCommentsPerPost: true,
 		MaxCommentsPerPost:   fetchBuffer,
