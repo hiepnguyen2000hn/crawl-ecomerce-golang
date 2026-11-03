@@ -9,6 +9,9 @@ __pycache__/
 
 # stray service binaries from `go build ./cmd/...`
 /apify-token-service
+/allegro-service
+/api-gateway
+/ai-service
 
 # downloaded ad media (MEDIA_HOST_DIR default)
 /data/

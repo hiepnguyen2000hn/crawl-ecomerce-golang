@@ -74,6 +74,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/jobs/trend/:id",
 				Handler: GetTrendJobHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/jobs/allegro",
+				Handler: CreateAllegroJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/allegro/:id",
+				Handler: GetAllegroJobHandler(serverCtx),
+			},
 		},
 	)
 }

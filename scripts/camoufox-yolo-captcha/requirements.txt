@@ -1,0 +1,8 @@
+camoufox[geoip]>=0.5.8
+ultralytics>=8.4.0
+opencv-python>=4.9.0
+numpy>=1.26.0
+onnx>=1.16.0
+onnxruntime>=1.19.0
+onnxslim>=0.1.0
+python-dotenv>=1.0.0

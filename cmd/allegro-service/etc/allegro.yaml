@@ -1,0 +1,13 @@
+Name: allegro-service
+ListenOn: 0.0.0.0:8089
+Postgres:
+  DSN: postgres://crawl:crawl@localhost:5433/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@localhost:5673/
+  Exchange: crawl
+  Concurrency: 1
+Allegro:
+  Python: /home/hiepnv/code/crawl-ecomerce-golang/scripts/camoufox-yolo-captcha/.venv/bin/python
+  Script: cmd/allegro-service/crawler/fetch.py
+  Xvfb: false
+  TimeoutSeconds: 300

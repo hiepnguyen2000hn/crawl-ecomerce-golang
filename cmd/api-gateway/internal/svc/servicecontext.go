@@ -6,6 +6,7 @@ package svc
 import (
 	"database/sql"
 
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/allegro-service/allegro"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/amazon-service/amazon"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/china1688-service/china1688"
@@ -29,6 +30,7 @@ type ServiceContext struct {
 	China1688Rpc china1688.China1688ServiceClient
 	RedditRpc    reddit.RedditServiceClient
 	RedditApiRpc redditapi.RedditApiServiceClient
+	AllegroRpc   allegro.AllegroServiceClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -64,6 +66,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+	allegroGrpcConn, err := grpc.NewClient(c.AllegroRpc.Target, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
 	return &ServiceContext{
 		Config:       c,
 		DB:           conn,
@@ -74,5 +80,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		China1688Rpc: china1688.NewChina1688ServiceClient(china1688GrpcConn),
 		RedditRpc:    reddit.NewRedditServiceClient(redditGrpcConn),
 		RedditApiRpc: redditapi.NewRedditApiServiceClient(redditApiGrpcConn),
+		AllegroRpc:   allegro.NewAllegroServiceClient(allegroGrpcConn),
 	}
 }

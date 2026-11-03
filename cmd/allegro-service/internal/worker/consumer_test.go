@@ -1,0 +1,30 @@
+package worker
+
+import "testing"
+
+func TestResolveTargets(t *testing.T) {
+	c := &Consumer{}
+	got := c.resolveTargets(JobMessage{JobID: "1", Keyword: "laptop gamingowy"})
+	if len(got) != 1 || got[0] != "https://allegro.pl/listing?string=laptop+gamingowy" {
+		t.Fatalf("unexpected keyword target: %v", got)
+	}
+
+	got2 := c.resolveTargets(JobMessage{JobID: "2", URL: "https://allegro.pl/listing?string=dell"})
+	if len(got2) != 1 || got2[0] != "https://allegro.pl/listing?string=dell" {
+		t.Fatalf("unexpected url target: %v", got2)
+	}
+}
+
+func TestHandleMessage_UnmarshalError(t *testing.T) {
+	c := &Consumer{}
+	if err := c.HandleMessage([]byte("not json")); err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestHandleMessage_EmptyTargetsError(t *testing.T) {
+	c := &Consumer{}
+	if err := c.HandleMessage([]byte(`{"job_id":"123"}`)); err == nil {
+		t.Fatal("expected error when neither keyword nor url is provided")
+	}
+}
