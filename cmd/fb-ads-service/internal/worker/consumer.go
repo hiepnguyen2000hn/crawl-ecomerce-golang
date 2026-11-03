@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/media"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/apify"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/rabbitmq"
 )
@@ -39,6 +40,13 @@ type Consumer struct {
 	DB        *sql.DB
 	Apify     apify.Client
 	Publisher *rabbitmq.Publisher
+	// Media records each ad's images for the media worker to download.
+	// Optional: nil skips it.
+	Media MediaRecorder
+}
+
+type MediaRecorder interface {
+	UpsertPending(ctx context.Context, adArchiveID string, refs []media.Ref) error
 }
 
 func (c *Consumer) HandleMessage(body []byte) error {
@@ -86,6 +94,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 			c.markFailed(ctx, msg.JobID)
 			return fmt.Errorf("worker: insert fbads_raw: %w", err)
 		}
+		c.recordMedia(ctx, ad)
 	}
 
 	if _, err := c.DB.ExecContext(ctx,
@@ -103,6 +112,23 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		return fmt.Errorf("worker: publish completed event: %w", err)
 	}
 	return nil
+}
+
+// recordMedia queues the ad's SD images for download. It deliberately has no
+// error return: the fbcdn URLs are only a bonus on top of a crawl that already
+// succeeded, and failing here would make RabbitMQ re-run the (paid) Apify call.
+func (c *Consumer) recordMedia(ctx context.Context, ad apify.Ad) {
+	if c.Media == nil {
+		return
+	}
+	refs, err := media.ExtractRefs(ad.Raw)
+	if err != nil {
+		fmt.Println("worker: extract media refs for ad", ad.AdArchiveID+":", err)
+		return
+	}
+	if err := c.Media.UpsertPending(ctx, ad.AdArchiveID, refs); err != nil {
+		fmt.Println("worker: record media for ad", ad.AdArchiveID+":", err)
+	}
 }
 
 // nullableTime converts a zero time.Time (apify.Ad's representation of an

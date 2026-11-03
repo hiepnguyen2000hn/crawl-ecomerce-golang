@@ -22,4 +22,11 @@ type Config struct {
 		// Concurrent runs allowed per Apify account. Apify's free plan is 5.
 		MaxConcurrencyPerToken int `json:",default=5"`
 	}
+	// Where downloaded ad images are written. In docker this is a bind
+	// mount of the host's MEDIA_HOST_DIR, which nginx serves at /media/.
+	Media struct {
+		Dir         string `json:",default=/data/media"`
+		MaxBytes    int64  `json:",default=10485760"`
+		Concurrency int    `json:",default=4"`
+	}
 }
