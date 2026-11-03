@@ -431,11 +431,11 @@ def listing_url(query: str, page_no: int) -> str:
     return f"{LISTING_URL}?{urlencode(params)}"
 
 
-def crawl_allegro(query: str, pages: int, headless: bool = False) -> dict[str, Any]:
+def crawl_allegro(query: str, pages: int, headless: bool = True) -> dict[str, Any]:
     detector = YOLO26CaptchaDetector()
     target_os = host_os_name()
     result: dict[str, Any] = {
-        "engine": f"camoufox(os={target_os})+yolo26",
+        "engine": f"camoufox(os={target_os},headless={headless})+yolo26",
         "query": query,
         "pages_requested": pages,
         "pages_fetched": 0,
@@ -448,7 +448,7 @@ def crawl_allegro(query: str, pages: int, headless: bool = False) -> dict[str, A
         page = browser.new_page()
         for page_no in range(1, pages + 1):
             url = listing_url(query, page_no)
-            print(f"[+] Opening page {page_no}/{pages} (os={target_os}): {url}", file=sys.stderr)
+            print(f"[+] Opening page {page_no}/{pages} (os={target_os}, headless={headless}): {url}", file=sys.stderr)
             try:
                 page.goto(url, wait_until="commit", timeout=60000)
             except Exception as e:
@@ -485,10 +485,11 @@ def main() -> int:
     ap.add_argument("query", nargs="?", default="laptop", help="Search keyword (default: laptop)")
     ap.add_argument("-p", "--pages", type=int, default=1, help="Number of pages to crawl (default: 1)")
     ap.add_argument("-o", "--out", default=None, help="Output JSON file path")
+    ap.add_argument("--headed", action="store_true", help="Show browser UI window (default: run headless in background)")
     args = ap.parse_args()
 
-    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "false").strip().lower()
-    headless = headless_env not in ("0", "false", "no")
+    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower()
+    headless = False if args.headed else (headless_env not in ("0", "false", "no"))
 
     res = crawl_allegro(args.query, args.pages, headless=headless)
     slug = re.sub(r"[^a-z0-9]+", "-", args.query.lower()).strip("-") or "query"

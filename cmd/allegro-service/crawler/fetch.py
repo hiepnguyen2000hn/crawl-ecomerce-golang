@@ -429,7 +429,7 @@ def main() -> int:
     ap.add_argument("--max-items", type=int, default=0, help="Max offers to return (0 = unlimited)")
     ap.add_argument("--profile", default="", help="Optional profile directory")
     ap.add_argument("--proxy", default="", help="Optional proxy URL")
-    ap.add_argument("--headless", action="store_true", help="Run headless (virtual display recommended)")
+    ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
     args = ap.parse_args()
 
     target_url = args.url
@@ -442,8 +442,11 @@ def main() -> int:
     detector = YOLO26CaptchaDetector()
     target_os = host_os_name()
 
+    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower()
+    headless = False if args.headed else (headless_env not in ("0", "false", "no"))
+
     camoufox_kwargs: dict[str, Any] = {
-        "headless": False,
+        "headless": headless,
         "os": target_os,
         "humanize": True,
     }
