@@ -4,9 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/fbads"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/config"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/media"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/server"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/svc"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/internal/worker"
@@ -50,10 +54,52 @@ func main() {
 		panic(err)
 	}
 
-	w := &worker.Consumer{DB: svcCtx.DB, Apify: svcCtx.Apify, Publisher: publisher}
+	mediaStore := &media.Store{DB: svcCtx.DB}
+	w := &worker.Consumer{DB: svcCtx.DB, Apify: svcCtx.Apify, Publisher: publisher, Media: mediaStore}
 	go func() {
 		if err := consumer.Consume(context.Background(), "fbads.jobs", "fbads.jobs", w.HandleMessage); err != nil {
 			fmt.Println("fb-ads-service consumer stopped:", err)
+		}
+	}()
+
+	// fbcdn image URLs expire a few days after the crawl, so download them
+	// as soon as the crawl completes. Own queue on the existing event, next
+	// to ai-service's and product-extractor's.
+	if err := os.MkdirAll(c.Media.Dir, 0o755); err != nil {
+		panic(fmt.Errorf("fb-ads-service: media dir %s: %w", c.Media.Dir, err))
+	}
+	mediaConsumer, err := rabbitmq.NewConsumer(rabbitmq.Config{
+		URL:         c.RabbitMQ.URL,
+		Exchange:    c.RabbitMQ.Exchange,
+		Concurrency: 1,
+	})
+	if err != nil {
+		panic(err)
+	}
+	mediaWorker := &media.Worker{
+		Repo: mediaStore,
+		Fetcher: &media.Downloader{
+			HTTP:     &http.Client{Timeout: 30 * time.Second},
+			Dir:      c.Media.Dir,
+			MaxBytes: c.Media.MaxBytes,
+		},
+		Concurrency: c.Media.Concurrency,
+		Retries:     3,
+	}
+	go func() {
+		if err := mediaConsumer.Consume(context.Background(), "fbads.media.completed", "crawl.completed.fbads", mediaWorker.HandleMessage); err != nil {
+			fmt.Println("fb-ads-service media consumer stopped:", err)
+		}
+	}()
+	// Safety net: retry media whose message was lost or that failed
+	// transiently, while the signed URL is still valid.
+	go func() {
+		for range time.Tick(media.StaleAfter) {
+			ctx, cancel := context.WithTimeout(context.Background(), media.StaleAfter)
+			if err := mediaWorker.Sweep(ctx); err != nil {
+				fmt.Println("fb-ads-service media sweep:", err)
+			}
+			cancel()
 		}
 	}()
 

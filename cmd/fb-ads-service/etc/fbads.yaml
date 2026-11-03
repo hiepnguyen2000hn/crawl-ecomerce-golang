@@ -11,3 +11,7 @@ Apify:
   ActorID: igolaizola~facebook-ad-library-scraper
   BaseURL: https://api.apify.com/v2
   MaxConcurrencyPerToken: 5
+Media:
+  Dir: ./data/media
+  MaxBytes: 10485760
+  Concurrency: 4

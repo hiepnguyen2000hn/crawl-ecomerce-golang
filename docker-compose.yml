@@ -74,6 +74,10 @@ services:
       dockerfile: cmd/fb-ads-service/Dockerfile
     environment:
       APIFY_API_TOKEN: ${APIFY_API_TOKEN}
+    volumes:
+      # Downloaded ad images. A host directory, not a named volume, so that
+      # `docker compose down -v` cannot delete them and nginx can serve them.
+      - ${MEDIA_HOST_DIR:-./data/media}:/data/media
     depends_on:
       postgres:
         condition: service_healthy
