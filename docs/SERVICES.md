@@ -273,6 +273,48 @@ curl -X POST localhost:8888/jobs/reddit-api \
 
 ---
 
+## 10. allegro-service — Allegro.pl Product & Brand/Model Extractor (`Camoufox` + `YOLO26`)
+
+- **Crawl gì:** toàn bộ product card trên trang tìm kiếm/listing `allegro.pl` — bao gồm: `title`, **`brand` (nhà sản xuất)**, **`model` (mẫu mã)**, `condition` (tình trạng), `seller` (nhà bán), `price`, `price_with_delivery`, `currency` (`PLN`), `rating`, `reviews_count`, `bought_recently`, `super_seller`, `smart`, `delivery`, `image_url`, `product_url`, và **`specs` (JSONB thông số kỹ thuật từ `<dl><dt><dd>`)**.
+- **Tool/API dùng:** **Camoufox (`os="linux"`, `headless=True`, `humanize=True`) + YOLO26 (`onnxruntime` + OpenCV)** — script tại [`cmd/allegro-service/crawler/fetch.py`](../cmd/allegro-service/crawler/fetch.py) và [`scripts/camoufox-yolo-captcha`](../scripts/camoufox-yolo-captcha). Tài liệu chi tiết xem tại [`cmd/allegro-service/README.md`](../cmd/allegro-service/README.md).
+- **Cơ chế:** `api-gateway` (`POST /jobs/allegro` & `GET /jobs/allegro/:id`) → RabbitMQ (`allegro.jobs`) → `allegro-service` (gRPC `:8089` + worker, proto tại [`rpc/allegro`](../rpc/allegro)) gọi `fetch.py` chạy ngầm → lưu `allegro_raw` → publish `crawl.completed.allegro` → `ai-service` phân tích thị trường.
+- **Bảng lưu:** `allegro_raw` (`db/migrations/000012_allegro.up.sql`).
+- **Request mẫu (tìm theo từ khoá):**
+
+```sh
+curl -X POST localhost:8888/jobs/allegro \
+  -H "Content-Type: application/json" \
+  -d '{"keyword": "laptop", "pages": 1, "max_items": 30}'
+```
+
+- **Request mẫu (crawl theo URL cụ thể):**
+
+```sh
+curl -X POST localhost:8888/jobs/allegro \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://allegro.pl/listing?string=laptop&order=qd", "pages": 2}'
+```
+
+- **Dữ liệu mẫu (1 row trong `allegro_raw`):**
+
+| cột | giá trị mẫu |
+|---|---|
+| `offer_id` | `17118603300` |
+| `product_id` | `880fe6be-3992-4532-97f2-8fd88c55889a` |
+| `title` | `Laptop Lenovo V15 G4 15,6 " AMD Ryzen 5 16 GB / 512 GB czarny` |
+| `brand` | `Lenovo` |
+| `model` | `V15 G4` |
+| `seller` | `ogit_pl` |
+| `price` | `2499` |
+| `price_with_delivery` | `2509.49` |
+| `currency` | `PLN` |
+| `rating` | `4.83` |
+| `reviews_count` | `113` |
+| `bought_recently` | `39` |
+| `specs` | `{"Seria procesora": "AMD Ryzen 5", "Przekątna ekranu": "15.6\"", "Typ dysku twardego": "SSD"}` |
+
+---
+
 ## Tổng hợp nguồn dữ liệu
 
 | Service | Nguồn crawl | Tool/API | Bảng lưu |
@@ -285,4 +327,5 @@ curl -X POST localhost:8888/jobs/reddit-api \
 | reddit-api-service | Reddit post + top comments | Reddit OAuth API (miễn phí) | `reddit_posts_raw`, `reddit_comments_raw` |
 | product-extractor-service | Landing page của ad Facebook | crawl4ai-service + OpenRouter LLM | `products` |
 | niche-research-service | Google Trends (theo nhiều quốc gia) | SerpApi + OpenRouter LLM | `niche_sessions` |
-| ai-service | (không crawl) tóm tắt insight từ `trend_raw`/`fbads_raw` | OpenRouter LLM | `ai_results` |
+| ai-service | (không crawl) tóm tắt insight từ `trend_raw`/`fbads_raw`/`amazon_raw`/`allegro_raw` | OpenRouter LLM | `ai_results` |
+| allegro-service | Allegro.pl listing | Camoufox (`os=linux`, `headless=True`) + YOLO26 ONNX | `allegro_raw` |
