@@ -105,6 +105,33 @@ func (c *Consumer) HandleMessage(body []byte) error {
 			return fmt.Errorf("worker: iterate amazon_raw: %w", err)
 		}
 		prompt = fmt.Sprintf("Analyze these %d Amazon products and summarize the price range, typical rating, and any standout listings in 3-4 sentences:\n%s", count, sb.String())
+	case "allegro":
+		rows, err := c.DB.QueryContext(ctx,
+			`SELECT COALESCE(title, ''), COALESCE(brand, ''), COALESCE(model, ''), COALESCE(price, 0), COALESCE(currency, 'PLN'), COALESCE(rating, 0), COALESCE(reviews_count, 0) FROM allegro_raw WHERE job_id = $1 ORDER BY position ASC LIMIT 60`, msg.JobID)
+		if err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: load allegro_raw: %w", err)
+		}
+		var sb strings.Builder
+		count := 0
+		for rows.Next() {
+			var title, brand, model, currency string
+			var price, rating float64
+			var reviewsCount int
+			if err := rows.Scan(&title, &brand, &model, &price, &currency, &rating, &reviewsCount); err != nil {
+				rows.Close()
+				c.markFailed(ctx, msg.JobID)
+				return fmt.Errorf("worker: scan allegro_raw: %w", err)
+			}
+			fmt.Fprintf(&sb, "Product %d — [%s %s] %s | Price: %.2f %s | Rating: %.1f (%d reviews)\n", count+1, brand, model, title, price, currency, rating, reviewsCount)
+			count++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			c.markFailed(ctx, msg.JobID)
+			return fmt.Errorf("worker: iterate allegro_raw: %w", err)
+		}
+		prompt = fmt.Sprintf("Analyze these %d Allegro.pl products (brands, models, price range in PLN, and ratings) and summarize the market landscape in 3-4 sentences:\n%s", count, sb.String())
 	default:
 		c.markFailed(ctx, msg.JobID)
 		return fmt.Errorf("worker: unknown job type %q", jobType)

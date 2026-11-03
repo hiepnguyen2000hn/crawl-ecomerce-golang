@@ -129,3 +129,25 @@ type GetTrendJobResponse struct {
 	Keyword  string `json:"keyword"`
 	AiOutput string `json:"ai_output"`
 }
+
+type CreateAllegroJobRequest struct {
+	Keyword  string   `json:"keyword,optional"`
+	Url      string   `json:"url,optional"`
+	Urls     []string `json:"urls,optional"`
+	Pages    int      `json:"pages,optional"`
+	MaxItems int      `json:"max_items,optional"`
+}
+
+type CreateAllegroJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
+type GetAllegroJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetAllegroJobResponse struct {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
+}

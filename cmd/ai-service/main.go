@@ -66,6 +66,11 @@ func main() {
 		panic(err)
 	}
 
+	allegroConsumer, err := rabbitmq.NewConsumer(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})
+	if err != nil {
+		panic(err)
+	}
+
 	w := &worker.Consumer{DB: conn, Provider: provider}
 	fmt.Println("Starting ai-service consumer...")
 
@@ -86,6 +91,13 @@ func main() {
 	go func() {
 		if err := amazonConsumer.Consume(context.Background(), "ai.amazon.completed", "crawl.completed.amazon", w.HandleMessage); err != nil {
 			fmt.Fprintln(os.Stderr, "ai-service amazon consumer stopped:", err)
+			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		if err := allegroConsumer.Consume(context.Background(), "ai.allegro.completed", "crawl.completed.allegro", w.HandleMessage); err != nil {
+			fmt.Fprintln(os.Stderr, "ai-service allegro consumer stopped:", err)
 			os.Exit(1)
 		}
 	}()

@@ -127,6 +127,28 @@ type GetRedditApiJobResponse {
 	AiOutput     string `json:"ai_output"`
 }
 
+type CreateAllegroJobRequest {
+	Keyword  string   `json:"keyword,optional"`
+	Url      string   `json:"url,optional"`
+	Urls     []string `json:"urls,optional"`
+	Pages    int      `json:"pages,optional"`
+	MaxItems int      `json:"max_items,optional"`
+}
+
+type CreateAllegroJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetAllegroJobRequest {
+	Id string `path:"id"`
+}
+
+type GetAllegroJobResponse {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -163,5 +185,11 @@ service gateway-api {
 
 	@handler GetRedditApiJob
 	get /jobs/reddit-api/:id (GetRedditApiJobRequest) returns (GetRedditApiJobResponse)
+
+	@handler CreateAllegroJob
+	post /jobs/allegro (CreateAllegroJobRequest) returns (CreateAllegroJobResponse)
+
+	@handler GetAllegroJob
+	get /jobs/allegro/:id (GetAllegroJobRequest) returns (GetAllegroJobResponse)
 }
 

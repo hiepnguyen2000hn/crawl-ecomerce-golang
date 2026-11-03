@@ -18,3 +18,5 @@ RedditRpc:
   Target: 127.0.0.1:8087
 RedditApiRpc:
   Target: 127.0.0.1:8088
+AllegroRpc:
+  Target: 127.0.0.1:8089
