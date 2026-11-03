@@ -68,6 +68,11 @@ SELECT status, error, count(*) FROM fbads_media
 WHERE updated_at > now() - interval '1 day' AND status IN ('failed', 'expired')
 GROUP BY 1, 2 ORDER BY 3 DESC;
 ```
+Cứ 15 phút service tự quét lại một lần: ảnh `pending` mà quá 15 phút không ai
+xử lý (ví dụ worker restart giữa chừng), và ảnh `failed` có `attempts < 5`,
+đều được tải lại nếu link còn hạn. Một job quá lớn chưa tải xong trong 10 phút
+sẽ được RabbitMQ giao lại để tải nốt phần còn lại.
+
 Nếu `expired` nhiều ngay sau khi crawl, có thể fbcdn đang chặn IP của VPS. Thử
 `curl -I <source_url>` từ VPS. Một ad bị crawl lại ở job sau sẽ có link mới:
 dòng `failed`/`expired` tự quay về `pending` và được tải lại, dòng `done` giữ

@@ -76,11 +76,13 @@ func (d *Downloader) Fetch(ctx context.Context, r Row) (Result, error) {
 // writeAtomic streams src into dst via a temp file so a reader (nginx) never
 // sees a half-written image, and nothing is left behind on failure.
 func writeAtomic(dst string, src io.Reader, maxBytes int64) (int64, error) {
-	tmp := dst + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	// A unique temp name: the sweeper and a job message may fetch the same
+	// row at the same time.
+	f, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*.tmp")
 	if err != nil {
 		return 0, fmt.Errorf("media: create temp: %w", err)
 	}
+	tmp := f.Name()
 	n, err := io.Copy(f, src)
 	if cerr := f.Close(); err == nil {
 		err = cerr

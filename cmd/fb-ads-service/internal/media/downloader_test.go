@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func serve(t *testing.T, status int, contentType, body string) *httptest.Server {
@@ -124,5 +125,41 @@ func TestDownloader_RejectsOversize(t *testing.T) {
 	}
 	if files := listFiles(t, dir); len(files) != 0 {
 		t.Errorf("files left behind: %v", files)
+	}
+}
+
+func TestDownloader_ConcurrentSameRow(t *testing.T) {
+	// The sweeper and a job message can fetch the same row at once; both
+	// must succeed and leave exactly one intact file.
+	body := strings.Repeat("x", 1<<20)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Write([]byte(body[:len(body)/2]))
+		w.(http.Flusher).Flush()
+		<-release // both requests are now mid-write
+		w.Write([]byte(body[len(body)/2:]))
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	d := &Downloader{HTTP: srv.Client(), Dir: dir, MaxBytes: 2 << 20}
+
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() { _, err := d.Fetch(context.Background(), testRow(srv.URL)); errs <- err }()
+	}
+	time.Sleep(200 * time.Millisecond)
+	close(release)
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("fetch %d: %v", i, err)
+		}
+	}
+	files := listFiles(t, dir)
+	if len(files) != 1 {
+		t.Fatalf("files = %v, want exactly one", files)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, files[0])); len(b) != len(body) {
+		t.Errorf("file size = %d, want %d", len(b), len(body))
 	}
 }

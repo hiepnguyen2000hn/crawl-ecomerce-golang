@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -147,5 +148,47 @@ func TestMarkFailed_CountsAttempts(t *testing.T) {
 	}
 	if st, _, att := statusOf(t, s, "ad-3", "p"); st != "failed" || att != 1 {
 		t.Errorf("status=%s attempts=%d, want failed/1", st, att)
+	}
+}
+
+func TestRetryable_StalePendingAndFailedUnexpired(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	future, past := time.Now().Add(48*time.Hour), time.Now().Add(-time.Hour)
+	refs := []Ref{
+		{JSONPath: "fresh-pending", Kind: KindImage, URL: "u", ExpiresAt: future},
+		{JSONPath: "stale-pending", Kind: KindImage, URL: "u", ExpiresAt: future},
+		{JSONPath: "failed-ok", Kind: KindImage, URL: "u", ExpiresAt: future},
+		{JSONPath: "failed-too-many", Kind: KindImage, URL: "u", ExpiresAt: future},
+		{JSONPath: "failed-url-dead", Kind: KindImage, URL: "u", ExpiresAt: past},
+		{JSONPath: "expired", Kind: KindImage, URL: "u", ExpiresAt: future},
+		{JSONPath: "done", Kind: KindImage, URL: "u", ExpiresAt: future},
+	}
+	if err := s.UpsertPending(ctx, "ad-r", refs); err != nil {
+		t.Fatal(err)
+	}
+	set := func(path, status string, attempts int, age time.Duration) {
+		if _, err := s.DB.Exec(`UPDATE fbads_media SET status=$2, attempts=$3, updated_at=now()-$4::interval WHERE json_path=$1`,
+			path, status, attempts, fmt.Sprintf("%d seconds", int(age.Seconds()))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set("stale-pending", "pending", 0, time.Hour)
+	set("failed-ok", "failed", 1, time.Hour)
+	set("failed-too-many", "failed", MaxAttempts, time.Hour)
+	set("failed-url-dead", "failed", 1, time.Hour)
+	set("expired", "expired", 1, time.Hour)
+	set("done", "done", 1, time.Hour)
+
+	rows, err := s.Retryable(ctx, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, r := range rows {
+		got[r.JSONPath] = true
+	}
+	if len(rows) != 2 || !got["stale-pending"] || !got["failed-ok"] {
+		t.Fatalf("retryable = %v, want stale-pending and failed-ok", got)
 	}
 }

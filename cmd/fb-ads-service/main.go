@@ -91,6 +91,17 @@ func main() {
 			fmt.Println("fb-ads-service media consumer stopped:", err)
 		}
 	}()
+	// Safety net: retry media whose message was lost or that failed
+	// transiently, while the signed URL is still valid.
+	go func() {
+		for range time.Tick(media.StaleAfter) {
+			ctx, cancel := context.WithTimeout(context.Background(), media.StaleAfter)
+			if err := mediaWorker.Sweep(ctx); err != nil {
+				fmt.Println("fb-ads-service media sweep:", err)
+			}
+			cancel()
+		}
+	}()
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		fbads.RegisterFbAdsServiceServer(grpcServer, server.NewFbAdsServiceServer(svcCtx))

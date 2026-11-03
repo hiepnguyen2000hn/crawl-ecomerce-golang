@@ -74,8 +74,11 @@ func (s *Store) PendingForJob(ctx context.Context, jobID string) ([]Row, error) 
 	if err != nil {
 		return nil, fmt.Errorf("media: load pending: %w", err)
 	}
-	defer rows.Close()
+	return scanRows(rows)
+}
 
+func scanRows(rows *sql.Rows) ([]Row, error) {
+	defer rows.Close()
 	var out []Row
 	for rows.Next() {
 		var (
@@ -84,7 +87,7 @@ func (s *Store) PendingForJob(ctx context.Context, jobID string) ([]Row, error) 
 			expires sql.NullTime
 		)
 		if err := rows.Scan(&r.ID, &r.AdArchiveID, &r.JSONPath, &kind, &r.URL, &expires); err != nil {
-			return nil, fmt.Errorf("media: scan pending: %w", err)
+			return nil, fmt.Errorf("media: scan row: %w", err)
 		}
 		r.Kind = Kind(kind)
 		if expires.Valid {
@@ -122,4 +125,29 @@ func (s *Store) MarkFailed(ctx context.Context, id string, expired bool, errMsg 
 		return fmt.Errorf("media: mark %s %s: %w", status, id, err)
 	}
 	return nil
+}
+
+// MaxAttempts caps how many times the sweeper retries a failed row.
+const MaxAttempts = 5
+
+// StaleAfter is how long a row may sit in pending before the sweeper assumes
+// its crawl.completed message was lost (worker crash, timeout, dead-letter).
+const StaleAfter = 15 * time.Minute
+
+// Retryable returns rows worth another try: pending rows nobody has touched
+// for StaleAfter, and failed rows under MaxAttempts -- in both cases only
+// while the signed URL has not expired yet.
+func (s *Store) Retryable(ctx context.Context, limit int) ([]Row, error) {
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT id, ad_archive_id, json_path, kind, source_url, expires_at
+		FROM fbads_media
+		WHERE ((status = 'pending' AND updated_at < now() - $1::interval)
+		    OR (status = 'failed' AND attempts < $2))
+		  AND (expires_at IS NULL OR expires_at > now())
+		ORDER BY updated_at
+		LIMIT $3`, fmt.Sprintf("%d seconds", int(StaleAfter.Seconds())), MaxAttempts, limit)
+	if err != nil {
+		return nil, fmt.Errorf("media: load retryable: %w", err)
+	}
+	return scanRows(rows)
 }
