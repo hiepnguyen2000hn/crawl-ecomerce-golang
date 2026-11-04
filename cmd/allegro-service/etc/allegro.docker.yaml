@@ -7,7 +7,7 @@ RabbitMQ:
   Exchange: crawl
   Concurrency: 1
 Allegro:
-  Python: /app/camoufox-yolo-captcha/.venv/bin/python
-  Script: cmd/allegro-service/crawler/fetch.py
+  Python: /app/venv/bin/python
+  Script: /app/cmd/allegro-service/crawler/fetch.py
   Xvfb: false
   TimeoutSeconds: 300

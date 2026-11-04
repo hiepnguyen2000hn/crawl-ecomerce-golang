@@ -18,3 +18,5 @@ RedditRpc:
   Target: reddit-service:8087
 RedditApiRpc:
   Target: reddit-api-service:8088
+AllegroRpc:
+  Target: allegro-service:8089
