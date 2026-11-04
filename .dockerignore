@@ -1,0 +1,14 @@
+# Python virtualenvs and caches. The allegro image builds its own venv at
+# /app/venv; copying a host venv in would shadow it with wrong-path shebangs.
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# YOLO training artefacts and crawl output. Only yolo26n.onnx under models/ is
+# needed at runtime, and that is gitignored -- see cmd/allegro-service/README.md.
+scripts/camoufox-yolo-captcha/dataset
+scripts/camoufox-yolo-captcha/runs
+scripts/camoufox-yolo-captcha/debug
+scripts/camoufox-yolo-captcha/*.pt
+scripts/camoufox-yolo-captcha/allegro-*.json
+scripts/allegro-crawl
