@@ -212,6 +212,21 @@ services:
       - "8089:8089"
     restart: on-failure:5
 
+  allegro-service:
+    build:
+      context: .
+      dockerfile: cmd/allegro-service/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8090:8089"
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .
@@ -232,6 +247,8 @@ services:
       reddit-service:
         condition: service_started
       reddit-api-service:
+        condition: service_started
+      allegro-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully
