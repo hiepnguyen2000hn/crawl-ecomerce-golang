@@ -25,6 +25,7 @@ import json
 import os
 import platform
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
@@ -215,6 +216,21 @@ def select_top_comments(comments: list[dict[str, Any]], max_n: int) -> list[dict
     return out
 
 
+def comment_targets(offers: list[dict[str, Any]], max_products: int) -> list[dict[str, Any]]:
+    """Pick which offers get their comments scraped: those with a product url,
+    capped at max_products. Bounds the comment phase so it cannot run away and
+    jeopardise the already-collected listing data (best-effort guarantee)."""
+    if max_products <= 0:
+        return []
+    out: list[dict[str, Any]] = []
+    for o in offers:
+        if o.get("url"):
+            out.append(o)
+            if len(out) >= max_products:
+                break
+    return out
+
+
 # DOM extraction for product reviews (opinie). Heuristic/resilient: anchors on
 # star-rating labels ("x na 5") and climbs to the smallest block that also holds
 # review text. Selectors confirmed/refined during the implementation spike.
@@ -242,6 +258,14 @@ COMMENTS_JS = r"""
     const rating = rm ? parseFloat(rm[1].replace(',', '.')) : null;
 
     const full = clean(node.innerText);
+
+    // Skip aggregate rating / CTA widgets that also carry a "x na 5" label but
+    // are not individual reviews.
+    if (/ocen produktu|oceny produktu|Napisz opini|wszystkie opinie|średnia ocena/i.test(full)
+        && !/Treść recenzji|potwierdzona zakupem/i.test(full)) {
+      continue;
+    }
+
     const confirmed = /potwierdzona zakupem/i.test(full);
 
     // Strip Allegro UI labels/badges so content holds just the review body.
@@ -252,11 +276,17 @@ COMMENTS_JS = r"""
     content = content.replace(/Opinia potwierdzona zakupem/gi, '');
     content = clean(content) || full || null;
 
+    // Helpful votes: Allegro renders "Czy ta opinia była pomocna?" with Tak/Nie
+    // buttons carrying counts. Try the combined label first, then a "Tak (n)".
     let helpful = null;
-    const helpfulTxt = Array.from(node.querySelectorAll('button, span, a'))
-      .map((e) => clean(e.innerText))
-      .find((t) => /(przydatn|pomocn)/i.test(t) && /\d/.test(t));
-    if (helpfulTxt) helpful = intOf(helpfulTxt);
+    const texts = Array.from(node.querySelectorAll('button, span, a')).map((e) => clean(e.innerText));
+    const combined = texts.find((t) => /(przydatn|pomocn)/i.test(t) && /\d/.test(t));
+    if (combined) {
+      helpful = intOf(combined);
+    } else {
+      const tak = texts.find((t) => /^Tak\b/i.test(t) && /\d/.test(t));
+      if (tak) helpful = intOf(tak);
+    }
 
     const dm = full.match(/\b(\d{1,2}\s+\p{L}+\s+\d{4}|\d{2}\.\d{2}\.\d{4})\b/u);
 
@@ -302,7 +332,11 @@ def extract_comments_from_product(
         except Exception as e:
             print(f"(comment nav warning: {str(e).splitlines()[0][:80]})", file=sys.stderr)
 
-        settle_or_solve(page, detector)
+        html, _ = settle_or_solve(page, detector)
+        if is_blocked(html):
+            # Blocked product page: bail early instead of burning the scroll/click
+            # budget, so one challenged product doesn't eat the comment phase.
+            return []
         # Reviews lazy-load near the bottom of the product page; scroll down in
         # steps with waits to trigger loading before extracting.
         for _ in range(14):
@@ -588,6 +622,10 @@ def main() -> int:
     ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
     ap.add_argument("--with-comments", action="store_true", help="Also scrape top product reviews per offer")
     ap.add_argument("--max-comments", type=int, default=5, help="Max comments per product (default: 5)")
+    ap.add_argument("--max-comment-products", type=int, default=10,
+                    help="Max products to scrape comments for per run (default: 10)")
+    ap.add_argument("--comment-budget-seconds", type=int, default=150,
+                    help="Wall-clock budget for the whole comment phase (default: 150)")
     args = ap.parse_args()
 
     target_url = args.url
@@ -646,17 +684,23 @@ def main() -> int:
                 all_offers = all_offers[: args.max_items]
                 break
 
-        # Per-product comments: reuse the DataDome-warmed context. Best-effort —
-        # a product that fails to yield comments gets an empty list, never fails
-        # the whole job.
+        # Per-product comments: reuse the DataDome-warmed context. Best-effort and
+        # BOUNDED — capped to --max-comment-products and a wall-clock budget — so
+        # the comment phase can never run past the Go subprocess timeout and lose
+        # the already-collected listing data. Every offer gets a comments list.
         if args.with_comments and all_offers:
             for o in all_offers:
-                product_url = o.get("url")
-                if not product_url:
-                    o["comments"] = []
-                    continue
+                o.setdefault("comments", [])
+            targets = comment_targets(all_offers, args.max_comment_products)
+            started = time.monotonic()
+            for o in targets:
+                if (args.comment_budget_seconds > 0
+                        and time.monotonic() - started > args.comment_budget_seconds):
+                    print("(comment budget exhausted; remaining offers left without comments)",
+                          file=sys.stderr)
+                    break
                 o["comments"] = extract_comments_from_product(
-                    page, product_url, args.max_comments, detector
+                    page, o["url"], args.max_comments, detector
                 )
 
     if not all_offers:

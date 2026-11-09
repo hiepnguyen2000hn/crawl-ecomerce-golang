@@ -3,7 +3,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fetch import select_top_comments  # noqa: E402
+from fetch import comment_targets, select_top_comments  # noqa: E402
+
+
+def test_comment_targets_caps_and_skips_urlless():
+    offers = [
+        {"url": "u1"}, {"url": None}, {"url": "u2"}, {}, {"url": "u3"},
+    ]
+    got = comment_targets(offers, 2)
+    assert [o["url"] for o in got] == ["u1", "u2"]
+
+
+def test_comment_targets_zero_cap_returns_empty():
+    assert comment_targets([{"url": "u"}], 0) == []
+
+
+def test_comment_targets_fewer_than_cap():
+    offers = [{"url": "u1"}, {}, {"url": "u2"}]
+    got = comment_targets(offers, 10)
+    assert [o["url"] for o in got] == ["u1", "u2"]
 
 
 def test_select_top_comments_sorts_by_helpful_and_caps():
