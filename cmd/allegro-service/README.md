@@ -216,9 +216,17 @@ Allegro:
 
 Allegro chặn IP datacenter/VPS bằng DataDome (trang interstitial ~2KB `allegrocaptcha.com`). Dùng proxy residential để vượt:
 
-- **`ProxyFile`** trỏ tới file Webshare (mỗi dòng `host:port:user:pass`). Service chọn **ngẫu nhiên 1 proxy**, nếu bị chặn thì **tự thử proxy kế tiếp** (tối đa `--proxy-retries`, mặc định 5). Đây là cách khuyến nghị.
+- **`WEBSHARE_API_KEY`** (env): service gọi thẳng **Webshare API** lấy pool proxy mới nhất rồi xoay vòng + retry. **Ưu tiên cao nhất**, không cần mount file. Khuyến nghị cho VPS/Docker.
+- **`ProxyFile`** trỏ tới file Webshare (mỗi dòng `host:port:user:pass`). Service chọn **ngẫu nhiên 1 proxy**, nếu bị chặn thì **tự thử proxy kế tiếp** (tối đa `--proxy-retries`, mặc định 5).
 - **`Proxy`** dùng 1 proxy tĩnh duy nhất (không xoay vòng).
 - Không set gì → crawl trực tiếp (thường bị DataDome chặn trên VPS).
+
+Thứ tự ưu tiên nguồn proxy: **API key → ProxyFile → Proxy → direct** (nguồn sau chỉ dùng khi nguồn trước rỗng). API key truyền qua **env** (không lộ trong `ps`); CLI độc lập dùng `--proxy-api-key` hoặc env `WEBSHARE_API_KEY`:
+
+```bash
+WEBSHARE_API_KEY=xxxxxxxx ./scripts/camoufox-yolo-captcha/.venv/bin/python \
+  cmd/allegro-service/crawler/fetch.py --keyword "laptop" --pages 1 --max-items 2 --with-comments
+```
 
 CLI độc lập có proxy rotation:
 ```bash
