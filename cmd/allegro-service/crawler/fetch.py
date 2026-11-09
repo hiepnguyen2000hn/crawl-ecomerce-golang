@@ -27,7 +27,7 @@ import platform
 import sys
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
 
 # Import YOLO26 + Camoufox solver from scripts/camoufox-yolo-captcha
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -199,6 +199,140 @@ EXTRACT_JS = r"""
 """
 
 
+def select_top_comments(comments: list[dict[str, Any]], max_n: int) -> list[dict[str, Any]]:
+    """Rank reviews by helpful/vote count (missing -> 0), stable, cap at max_n,
+    and stamp 1-based position. Pure, unit-testable (no browser)."""
+    def helpful_key(c: dict[str, Any]) -> float:
+        hc = c.get("helpful_count")
+        return float(hc) if isinstance(hc, (int, float)) else 0.0
+
+    ranked = sorted(comments, key=helpful_key, reverse=True)
+    out: list[dict[str, Any]] = []
+    for i, c in enumerate(ranked[: max(0, max_n)]):
+        item = dict(c)
+        item["position"] = i + 1
+        out.append(item)
+    return out
+
+
+# DOM extraction for product reviews (opinie). Heuristic/resilient: anchors on
+# star-rating labels ("x na 5") and climbs to the smallest block that also holds
+# review text. Selectors confirmed/refined during the implementation spike.
+COMMENTS_JS = r"""
+() => {
+  const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
+  const intOf = (s) => { const m = (s || '').match(/\d+/); return m ? parseInt(m[0], 10) : null; };
+
+  const ratingEls = Array.from(document.querySelectorAll('[aria-label*="na 5"]'));
+  const seen = new Set();
+  const reviews = [];
+  for (const rEl of ratingEls) {
+    let node = rEl;
+    for (let hops = 0; hops < 6 && node && node !== document.body; hops++) {
+      node = node.parentElement;
+      if (!node) break;
+      const txt = clean(node.innerText);
+      if (txt.length > 40 && txt.length < 2000) break;
+    }
+    if (!node || seen.has(node)) continue;
+    seen.add(node);
+
+    const label = rEl.getAttribute('aria-label') || '';
+    const rm = label.match(/([\d,]+)\s*na 5/);
+    const rating = rm ? parseFloat(rm[1].replace(',', '.')) : null;
+
+    const full = clean(node.innerText);
+    const confirmed = /potwierdzona zakupem/i.test(full);
+
+    // Strip Allegro UI labels/badges so content holds just the review body.
+    let content = full;
+    content = content.replace(/^.*?Treść recenzji\s*/is, '');
+    content = content.replace(/\s*(Zalety|Plusy|Wady|Minusy)\b.*$/is, '');
+    content = content.replace(/NAJBARDZIEJ POMOCNA/gi, '');
+    content = content.replace(/Opinia potwierdzona zakupem/gi, '');
+    content = clean(content) || full || null;
+
+    let helpful = null;
+    const helpfulTxt = Array.from(node.querySelectorAll('button, span, a'))
+      .map((e) => clean(e.innerText))
+      .find((t) => /(przydatn|pomocn)/i.test(t) && /\d/.test(t));
+    if (helpfulTxt) helpful = intOf(helpfulTxt);
+
+    const dm = full.match(/\b(\d{1,2}\s+\p{L}+\s+\d{4}|\d{2}\.\d{2}\.\d{4})\b/u);
+
+    const prosEl = Array.from(node.querySelectorAll('*'))
+      .find((e) => /^(Zalety|Plusy)/i.test(clean(e.innerText)));
+    const consEl = Array.from(node.querySelectorAll('*'))
+      .find((e) => /^(Wady|Minusy)/i.test(clean(e.innerText)));
+
+    const strong = node.querySelector('strong, h3, h4, [class*="author"], [class*="user"]');
+    const author = strong ? clean(strong.innerText) : null;
+
+    reviews.push({
+      author: author || null,
+      rating,
+      content,
+      review_date: dm ? dm[1] : null,
+      confirmed_purchase: confirmed,
+      helpful_count: helpful,
+      pros: prosEl ? clean(prosEl.innerText) : null,
+      cons: consEl ? clean(consEl.innerText) : null,
+    });
+  }
+  return reviews;
+}
+"""
+
+MORE_REVIEWS_SELECTORS = (
+    'button:has-text("Pokaż więcej")',
+    'button:has-text("Pokaż kolejne")',
+    'button:has-text("więcej opinii")',
+    'a:has-text("wszystkie opinie")',
+)
+
+
+def extract_comments_from_product(
+    page: Any, product_url: str, max_comments: int, detector: YOLO26CaptchaDetector
+) -> list[dict[str, Any]]:
+    """Open a product page, settle/solve DataDome, scroll to reviews, and extract
+    up to max_comments top reviews. Best-effort: any failure returns []."""
+    try:
+        try:
+            page.goto(product_url, wait_until="commit", timeout=60000)
+        except Exception as e:
+            print(f"(comment nav warning: {str(e).splitlines()[0][:80]})", file=sys.stderr)
+
+        settle_or_solve(page, detector)
+        # Reviews lazy-load near the bottom of the product page; scroll down in
+        # steps with waits to trigger loading before extracting.
+        for _ in range(14):
+            page.mouse.wheel(0, 1400)
+            page.wait_for_timeout(450)
+        page.wait_for_timeout(1500)
+
+        raw: list[dict[str, Any]] = []
+        for _ in range(3):
+            clicked = False
+            for sel in MORE_REVIEWS_SELECTORS:
+                try:
+                    loc = page.locator(sel)
+                    if loc.count():
+                        loc.first.click(timeout=2500)
+                        page.wait_for_timeout(1200)
+                        clicked = True
+                        break
+                except Exception:
+                    continue
+            raw = page.evaluate(COMMENTS_JS)
+            if len(raw) >= max_comments or not clicked:
+                break
+
+        return select_top_comments(raw, max_comments)
+    except Exception as e:
+        print(f"(comment extract error for {product_url}: {str(e).splitlines()[0][:100]})", file=sys.stderr)
+        return []
+
+
 def host_os_name() -> str:
     sys_name = platform.system().lower()
     if "linux" in sys_name:
@@ -206,6 +340,28 @@ def host_os_name() -> str:
     if "darwin" in sys_name:
         return "macos"
     return "windows"
+
+
+def build_proxy(proxy_url: str) -> dict[str, Any]:
+    """Build a Playwright/Camoufox proxy dict from a proxy URL.
+
+    Firefox ignores credentials embedded in the server URL, so any user:pass
+    must be split out into separate username/password fields. Webshare-style
+    endpoints (http://user:pass@p.webshare.io:80 or socks5://...) are supported;
+    a bare host:port is assumed to be an HTTP proxy.
+    """
+    if "://" not in proxy_url:
+        proxy_url = "http://" + proxy_url
+    parsed = urlparse(proxy_url)
+    server = f"{parsed.scheme}://{parsed.hostname}"
+    if parsed.port:
+        server += f":{parsed.port}"
+    proxy: dict[str, Any] = {"server": server}
+    if parsed.username:
+        proxy["username"] = unquote(parsed.username)
+    if parsed.password:
+        proxy["password"] = unquote(parsed.password)
+    return proxy
 
 
 def is_blocked(html: str) -> bool:
@@ -430,6 +586,8 @@ def main() -> int:
     ap.add_argument("--profile", default="", help="Optional profile directory")
     ap.add_argument("--proxy", default="", help="Optional proxy URL")
     ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
+    ap.add_argument("--with-comments", action="store_true", help="Also scrape top product reviews per offer")
+    ap.add_argument("--max-comments", type=int, default=5, help="Max comments per product (default: 5)")
     args = ap.parse_args()
 
     target_url = args.url
@@ -451,7 +609,7 @@ def main() -> int:
         "humanize": True,
     }
     if args.proxy:
-        camoufox_kwargs["proxy"] = {"server": args.proxy}
+        camoufox_kwargs["proxy"] = build_proxy(args.proxy)
         camoufox_kwargs["geoip"] = True
 
     all_offers: list[dict[str, Any]] = []
@@ -487,6 +645,19 @@ def main() -> int:
             if args.max_items > 0 and len(all_offers) >= args.max_items:
                 all_offers = all_offers[: args.max_items]
                 break
+
+        # Per-product comments: reuse the DataDome-warmed context. Best-effort —
+        # a product that fails to yield comments gets an empty list, never fails
+        # the whole job.
+        if args.with_comments and all_offers:
+            for o in all_offers:
+                product_url = o.get("url")
+                if not product_url:
+                    o["comments"] = []
+                    continue
+                o["comments"] = extract_comments_from_product(
+                    page, product_url, args.max_comments, detector
+                )
 
     if not all_offers:
         print(f"no product cards found on {last_html_bytes}-byte page", file=sys.stderr)
