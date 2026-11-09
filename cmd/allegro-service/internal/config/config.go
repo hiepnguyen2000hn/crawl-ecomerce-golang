@@ -17,6 +17,7 @@ type Config struct {
 		Script         string `json:",default=cmd/allegro-service/crawler/fetch.py"`
 		ProfileDir     string `json:",optional"`
 		Proxy          string `json:",optional"`
+		ProxyFile      string `json:",optional"`
 		Xvfb           bool   `json:",default=false"`
 		TimeoutSeconds int    `json:",default=300"`
 	}

@@ -128,11 +128,13 @@ type GetRedditApiJobResponse {
 }
 
 type CreateAllegroJobRequest {
-	Keyword  string   `json:"keyword,optional"`
-	Url      string   `json:"url,optional"`
-	Urls     []string `json:"urls,optional"`
-	Pages    int      `json:"pages,optional"`
-	MaxItems int      `json:"max_items,optional"`
+	Keyword      string   `json:"keyword,optional"`
+	Url          string   `json:"url,optional"`
+	Urls         []string `json:"urls,optional"`
+	Pages        int      `json:"pages,optional"`
+	MaxItems     int      `json:"max_items,optional"`
+	WithComments *bool    `json:"with_comments,optional"`
+	MaxComments  int      `json:"max_comments,optional"`
 }
 
 type CreateAllegroJobResponse {

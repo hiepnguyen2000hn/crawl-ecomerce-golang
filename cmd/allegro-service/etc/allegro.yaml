@@ -9,5 +9,7 @@ RabbitMQ:
 Allegro:
   Python: /home/hiepnv/code/crawl-ecomerce-golang/scripts/camoufox-yolo-captcha/.venv/bin/python
   Script: cmd/allegro-service/crawler/fetch.py
+  Proxy: ${ALLEGRO_PROXY}
+  ProxyFile: ${ALLEGRO_PROXY_FILE}
   Xvfb: false
   TimeoutSeconds: 300

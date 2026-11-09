@@ -23,6 +23,18 @@ const (
 	exitUsage      = 4
 )
 
+type Comment struct {
+	Author            *string  `json:"author"`
+	Rating            *float64 `json:"rating"`
+	Content           *string  `json:"content"`
+	ReviewDate        *string  `json:"review_date"`
+	ConfirmedPurchase bool     `json:"confirmed_purchase"`
+	HelpfulCount      *int     `json:"helpful_count"`
+	Pros              *string  `json:"pros"`
+	Cons              *string  `json:"cons"`
+	Position          int      `json:"position"`
+}
+
 type Offer struct {
 	Position          int               `json:"position"`
 	ProductID         *string           `json:"product_id"`
@@ -46,6 +58,7 @@ type Offer struct {
 	Sponsored         bool              `json:"sponsored"`
 	Page              int               `json:"page"`
 	Specs             map[string]string `json:"specs"`
+	Comments          []Comment         `json:"comments"`
 }
 
 type Result struct {
@@ -55,10 +68,12 @@ type Result struct {
 }
 
 type FetchParams struct {
-	URL      string
-	Keyword  string
-	Pages    int
-	MaxItems int
+	URL          string
+	Keyword      string
+	Pages        int
+	MaxItems     int
+	WithComments bool
+	MaxComments  int
 }
 
 type Client interface {
@@ -70,6 +85,7 @@ type Config struct {
 	Script     string
 	ProfileDir string
 	Proxy      string
+	ProxyFile  string
 	Xvfb       bool
 }
 
@@ -129,11 +145,20 @@ func (s *Subprocess) command(params FetchParams) (string, []string) {
 	if params.MaxItems > 0 {
 		args = append(args, "--max-items", strconv.Itoa(params.MaxItems))
 	}
+	if params.WithComments {
+		args = append(args, "--with-comments")
+		if params.MaxComments > 0 {
+			args = append(args, "--max-comments", strconv.Itoa(params.MaxComments))
+		}
+	}
 	if s.Cfg.ProfileDir != "" && !strings.Contains(s.Cfg.ProfileDir, "${") {
 		args = append(args, "--profile", s.Cfg.ProfileDir)
 	}
 	if s.Cfg.Proxy != "" && !strings.Contains(s.Cfg.Proxy, "${") {
 		args = append(args, "--proxy", s.Cfg.Proxy)
+	}
+	if s.Cfg.ProxyFile != "" && !strings.Contains(s.Cfg.ProxyFile, "${") {
+		args = append(args, "--proxy-file", s.Cfg.ProxyFile)
 	}
 
 	argv := append([]string{s.Cfg.Python}, args...)

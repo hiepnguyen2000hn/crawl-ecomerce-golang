@@ -24,10 +24,13 @@ import argparse
 import json
 import os
 import platform
+import random
+import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
 
 # Import YOLO26 + Camoufox solver from scripts/camoufox-yolo-captcha
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -40,7 +43,17 @@ import numpy as np  # noqa: E402
 from camoufox.sync_api import Camoufox  # noqa: E402
 from captcha_solver import YOLO26CaptchaDetector, drag_slider  # noqa: E402
 
-BLOCK_MARKERS = ("captcha-delivery.com", "DataDome Device Check", "geo.captcha-delivery")
+BLOCK_MARKERS = (
+    "captcha-delivery.com",
+    "DataDome Device Check",
+    "geo.captcha-delivery",
+    "allegrocaptcha.com",
+)
+
+# Webshare-style proxy line: "host:port:user:pass" with an optional leading index.
+_PROXY_LINE_RE = re.compile(
+    r"^\s*(?:\d+\s+)?(?P<host>[^:\s]+):(?P<port>\d+):(?P<user>[^:\s]+):(?P<pw>[^:\s]+)\s*$"
+)
 MIN_LISTING_BYTES = 200_000
 EXIT_OK, EXIT_CHALLENGED, EXIT_EMPTY, EXIT_USAGE = 0, 2, 3, 4
 
@@ -199,6 +212,173 @@ EXTRACT_JS = r"""
 """
 
 
+def select_top_comments(comments: list[dict[str, Any]], max_n: int) -> list[dict[str, Any]]:
+    """Rank reviews by helpful/vote count (missing -> 0), stable, cap at max_n,
+    and stamp 1-based position. Pure, unit-testable (no browser)."""
+    def helpful_key(c: dict[str, Any]) -> float:
+        hc = c.get("helpful_count")
+        return float(hc) if isinstance(hc, (int, float)) else 0.0
+
+    ranked = sorted(comments, key=helpful_key, reverse=True)
+    out: list[dict[str, Any]] = []
+    for i, c in enumerate(ranked[: max(0, max_n)]):
+        item = dict(c)
+        item["position"] = i + 1
+        out.append(item)
+    return out
+
+
+def comment_targets(offers: list[dict[str, Any]], max_products: int) -> list[dict[str, Any]]:
+    """Pick which offers get their comments scraped: those with a product url,
+    capped at max_products. Bounds the comment phase so it cannot run away and
+    jeopardise the already-collected listing data (best-effort guarantee)."""
+    if max_products <= 0:
+        return []
+    out: list[dict[str, Any]] = []
+    for o in offers:
+        if o.get("url"):
+            out.append(o)
+            if len(out) >= max_products:
+                break
+    return out
+
+
+# DOM extraction for product reviews (opinie). Heuristic/resilient: anchors on
+# star-rating labels ("x na 5") and climbs to the smallest block that also holds
+# review text. Selectors confirmed/refined during the implementation spike.
+COMMENTS_JS = r"""
+() => {
+  const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
+  const intOf = (s) => { const m = (s || '').match(/\d+/); return m ? parseInt(m[0], 10) : null; };
+
+  const ratingEls = Array.from(document.querySelectorAll('[aria-label*="na 5"]'));
+  const seen = new Set();
+  const reviews = [];
+  for (const rEl of ratingEls) {
+    let node = rEl;
+    for (let hops = 0; hops < 6 && node && node !== document.body; hops++) {
+      node = node.parentElement;
+      if (!node) break;
+      const txt = clean(node.innerText);
+      if (txt.length > 40 && txt.length < 2000) break;
+    }
+    if (!node || seen.has(node)) continue;
+    seen.add(node);
+
+    const label = rEl.getAttribute('aria-label') || '';
+    const rm = label.match(/([\d,]+)\s*na 5/);
+    const rating = rm ? parseFloat(rm[1].replace(',', '.')) : null;
+
+    const full = clean(node.innerText);
+
+    // Skip aggregate rating / CTA widgets that also carry a "x na 5" label but
+    // are not individual reviews.
+    if (/ocen produktu|oceny produktu|Napisz opini|wszystkie opinie|średnia ocena/i.test(full)
+        && !/Treść recenzji|potwierdzona zakupem/i.test(full)) {
+      continue;
+    }
+
+    const confirmed = /potwierdzona zakupem/i.test(full);
+
+    // Strip Allegro UI labels/badges so content holds just the review body.
+    let content = full;
+    content = content.replace(/^.*?Treść recenzji\s*/is, '');
+    content = content.replace(/\s*(Zalety|Plusy|Wady|Minusy)\b.*$/is, '');
+    content = content.replace(/NAJBARDZIEJ POMOCNA/gi, '');
+    content = content.replace(/Opinia potwierdzona zakupem/gi, '');
+    content = clean(content) || full || null;
+
+    // Helpful votes: Allegro renders "Czy ta opinia była pomocna?" with Tak/Nie
+    // buttons carrying counts. Try the combined label first, then a "Tak (n)".
+    let helpful = null;
+    const texts = Array.from(node.querySelectorAll('button, span, a')).map((e) => clean(e.innerText));
+    const combined = texts.find((t) => /(przydatn|pomocn)/i.test(t) && /\d/.test(t));
+    if (combined) {
+      helpful = intOf(combined);
+    } else {
+      const tak = texts.find((t) => /^Tak\b/i.test(t) && /\d/.test(t));
+      if (tak) helpful = intOf(tak);
+    }
+
+    const dm = full.match(/\b(\d{1,2}\s+\p{L}+\s+\d{4}|\d{2}\.\d{2}\.\d{4})\b/u);
+
+    const prosEl = Array.from(node.querySelectorAll('*'))
+      .find((e) => /^(Zalety|Plusy)/i.test(clean(e.innerText)));
+    const consEl = Array.from(node.querySelectorAll('*'))
+      .find((e) => /^(Wady|Minusy)/i.test(clean(e.innerText)));
+
+    const strong = node.querySelector('strong, h3, h4, [class*="author"], [class*="user"]');
+    const author = strong ? clean(strong.innerText) : null;
+
+    reviews.push({
+      author: author || null,
+      rating,
+      content,
+      review_date: dm ? dm[1] : null,
+      confirmed_purchase: confirmed,
+      helpful_count: helpful,
+      pros: prosEl ? clean(prosEl.innerText) : null,
+      cons: consEl ? clean(consEl.innerText) : null,
+    });
+  }
+  return reviews;
+}
+"""
+
+MORE_REVIEWS_SELECTORS = (
+    'button:has-text("Pokaż więcej")',
+    'button:has-text("Pokaż kolejne")',
+    'button:has-text("więcej opinii")',
+    'a:has-text("wszystkie opinie")',
+)
+
+
+def extract_comments_from_product(
+    page: Any, product_url: str, max_comments: int, detector: YOLO26CaptchaDetector
+) -> list[dict[str, Any]]:
+    """Open a product page, settle/solve DataDome, scroll to reviews, and extract
+    up to max_comments top reviews. Best-effort: any failure returns []."""
+    try:
+        try:
+            page.goto(product_url, wait_until="commit", timeout=60000)
+        except Exception as e:
+            print(f"(comment nav warning: {str(e).splitlines()[0][:80]})", file=sys.stderr)
+
+        html, _ = settle_or_solve(page, detector)
+        if is_blocked(html):
+            # Blocked product page: bail early instead of burning the scroll/click
+            # budget, so one challenged product doesn't eat the comment phase.
+            return []
+        # Reviews lazy-load near the bottom of the product page; scroll down in
+        # steps with waits to trigger loading before extracting.
+        for _ in range(14):
+            page.mouse.wheel(0, 1400)
+            page.wait_for_timeout(450)
+        page.wait_for_timeout(1500)
+
+        raw: list[dict[str, Any]] = []
+        for _ in range(3):
+            clicked = False
+            for sel in MORE_REVIEWS_SELECTORS:
+                try:
+                    loc = page.locator(sel)
+                    if loc.count():
+                        loc.first.click(timeout=2500)
+                        page.wait_for_timeout(1200)
+                        clicked = True
+                        break
+                except Exception:
+                    continue
+            raw = page.evaluate(COMMENTS_JS)
+            if len(raw) >= max_comments or not clicked:
+                break
+
+        return select_top_comments(raw, max_comments)
+    except Exception as e:
+        print(f"(comment extract error for {product_url}: {str(e).splitlines()[0][:100]})", file=sys.stderr)
+        return []
+
+
 def host_os_name() -> str:
     sys_name = platform.system().lower()
     if "linux" in sys_name:
@@ -206,6 +386,54 @@ def host_os_name() -> str:
     if "darwin" in sys_name:
         return "macos"
     return "windows"
+
+
+def parse_proxy_line(line: str) -> str | None:
+    """Convert a Webshare "host:port:user:pass" line (optional leading index)
+    into a "http://user:pass@host:port" URL. Returns None for blank/bad lines."""
+    m = _PROXY_LINE_RE.match(line or "")
+    if not m:
+        return None
+    return f"http://{m['user']}:{m['pw']}@{m['host']}:{m['port']}"
+
+
+def load_proxies(path: str) -> list[str]:
+    """Load a Webshare-style proxy list file into proxy URLs, skipping bad
+    lines. Missing/unreadable file -> empty list (crawl proceeds direct)."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    out: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        url = parse_proxy_line(line)
+        if url:
+            out.append(url)
+    return out
+
+
+def build_proxy(proxy_url: str) -> dict[str, Any]:
+    """Build a Playwright/Camoufox proxy dict from a proxy URL.
+
+    Firefox ignores credentials embedded in the server URL, so any user:pass
+    must be split out into separate username/password fields. Webshare-style
+    endpoints (http://user:pass@p.webshare.io:80 or socks5://...) are supported;
+    a bare host:port is assumed to be an HTTP proxy.
+    """
+    if "://" not in proxy_url:
+        proxy_url = "http://" + proxy_url
+    parsed = urlparse(proxy_url)
+    server = f"{parsed.scheme}://{parsed.hostname}"
+    if parsed.port:
+        server += f":{parsed.port}"
+    proxy: dict[str, Any] = {"server": server}
+    if parsed.username:
+        proxy["username"] = unquote(parsed.username)
+    if parsed.password:
+        proxy["password"] = unquote(parsed.password)
+    return proxy
 
 
 def is_blocked(html: str) -> bool:
@@ -421,41 +649,16 @@ def build_page_url(base_url: str, page_no: int) -> str:
     return urlunparse(parsed._replace(query=new_query))
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Fetch Allegro listing URL(s) with Camoufox + YOLO26")
-    ap.add_argument("url", nargs="?", help="Allegro listing URL (e.g. https://allegro.pl/listing?string=laptop)")
-    ap.add_argument("--keyword", default="", help="Search keyword if URL is not provided")
-    ap.add_argument("--pages", type=int, default=1, help="Number of pages to crawl (default: 1)")
-    ap.add_argument("--max-items", type=int, default=0, help="Max offers to return (0 = unlimited)")
-    ap.add_argument("--profile", default="", help="Optional profile directory")
-    ap.add_argument("--proxy", default="", help="Optional proxy URL")
-    ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
-    args = ap.parse_args()
-
-    target_url = args.url
-    if not target_url and args.keyword:
-        target_url = f"https://allegro.pl/listing?{urlencode({'string': args.keyword})}"
-    if not target_url:
-        print("error: either url or --keyword is required", file=sys.stderr)
-        return EXIT_USAGE
-
-    detector = YOLO26CaptchaDetector()
-    target_os = host_os_name()
-
-    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower()
-    headless = False if args.headed else (headless_env not in ("0", "false", "no"))
-
-    camoufox_kwargs: dict[str, Any] = {
-        "headless": headless,
-        "os": target_os,
-        "humanize": True,
-    }
-    if args.proxy:
-        camoufox_kwargs["proxy"] = {"server": args.proxy}
-        camoufox_kwargs["geoip"] = True
-
+def crawl_once(
+    camoufox_kwargs: dict[str, Any], target_url: str, args: Any, detector: YOLO26CaptchaDetector
+) -> tuple[list[dict[str, Any]], int, bool]:
+    """One crawl attempt with a single browser/proxy context: fetch listing
+    page(s), extract offers, then (optionally) per-product comments. Returns
+    (offers, last_html_bytes, blocked). `blocked` is True if DataDome challenged
+    the listing with no offers collected, so the caller can retry a new proxy."""
     all_offers: list[dict[str, Any]] = []
     last_html_bytes = 0
+    blocked = False
 
     with Camoufox(**camoufox_kwargs) as browser:
         page = browser.new_page()
@@ -471,8 +674,9 @@ def main() -> int:
 
             if is_blocked(html):
                 print(f"blocked by DataDome on page {page_no} ({len(html)} bytes)", file=sys.stderr)
+                blocked = True
                 if not all_offers:
-                    return EXIT_CHALLENGED
+                    return all_offers, last_html_bytes, blocked
                 break
 
             if page_no == 1:
@@ -488,7 +692,107 @@ def main() -> int:
                 all_offers = all_offers[: args.max_items]
                 break
 
+        # Per-product comments: reuse the DataDome-warmed context. Best-effort and
+        # BOUNDED — capped to --max-comment-products and a wall-clock budget — so
+        # the comment phase can never run past the Go subprocess timeout and lose
+        # the already-collected listing data. Every offer gets a comments list.
+        if args.with_comments and all_offers:
+            for o in all_offers:
+                o.setdefault("comments", [])
+            targets = comment_targets(all_offers, args.max_comment_products)
+            started = time.monotonic()
+            for o in targets:
+                if (args.comment_budget_seconds > 0
+                        and time.monotonic() - started > args.comment_budget_seconds):
+                    print("(comment budget exhausted; remaining offers left without comments)",
+                          file=sys.stderr)
+                    break
+                o["comments"] = extract_comments_from_product(
+                    page, o["url"], args.max_comments, detector
+                )
+
+    return all_offers, last_html_bytes, blocked
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Fetch Allegro listing URL(s) with Camoufox + YOLO26")
+    ap.add_argument("url", nargs="?", help="Allegro listing URL (e.g. https://allegro.pl/listing?string=laptop)")
+    ap.add_argument("--keyword", default="", help="Search keyword if URL is not provided")
+    ap.add_argument("--pages", type=int, default=1, help="Number of pages to crawl (default: 1)")
+    ap.add_argument("--max-items", type=int, default=0, help="Max offers to return (0 = unlimited)")
+    ap.add_argument("--profile", default="", help="Optional profile directory")
+    ap.add_argument("--proxy", default="", help="Optional single proxy URL")
+    ap.add_argument("--proxy-file", default="", help="Webshare-style proxy list file for random rotation")
+    ap.add_argument("--proxy-retries", type=int, default=5,
+                    help="Max proxies to try from the pool on block (default: 5)")
+    ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
+    ap.add_argument("--with-comments", action="store_true", help="Also scrape top product reviews per offer")
+    ap.add_argument("--max-comments", type=int, default=5, help="Max comments per product (default: 5)")
+    ap.add_argument("--max-comment-products", type=int, default=10,
+                    help="Max products to scrape comments for per run (default: 10)")
+    ap.add_argument("--comment-budget-seconds", type=int, default=150,
+                    help="Wall-clock budget for the whole comment phase (default: 150)")
+    args = ap.parse_args()
+
+    target_url = args.url
+    if not target_url and args.keyword:
+        target_url = f"https://allegro.pl/listing?{urlencode({'string': args.keyword})}"
+    if not target_url:
+        print("error: either url or --keyword is required", file=sys.stderr)
+        return EXIT_USAGE
+
+    detector = YOLO26CaptchaDetector()
+    target_os = host_os_name()
+
+    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower()
+    headless = False if args.headed else (headless_env not in ("0", "false", "no"))
+
+    base_kwargs: dict[str, Any] = {
+        "headless": headless,
+        "os": target_os,
+        "humanize": True,
+    }
+
+    # Build the ordered list of proxy attempts. A proxy file (Webshare-style)
+    # enables random rotation with retry-on-block; a single --proxy is used as-is;
+    # otherwise we crawl direct (one attempt).
+    proxies: list[str] = []
+    if args.proxy_file:
+        proxies = load_proxies(args.proxy_file)
+        if not proxies:
+            print(f"(proxy file '{args.proxy_file}' empty/unreadable; crawling direct)", file=sys.stderr)
+    elif args.proxy:
+        proxies = [args.proxy]
+
+    if proxies:
+        random.shuffle(proxies)
+        attempts: list[str | None] = proxies[: max(1, args.proxy_retries)]
+    else:
+        attempts = [None]
+
+    all_offers: list[dict[str, Any]] = []
+    last_html_bytes = 0
+    any_blocked = False
+
+    for i, proxy in enumerate(attempts, 1):
+        kwargs = dict(base_kwargs)
+        if proxy:
+            kwargs["proxy"] = build_proxy(proxy)
+            kwargs["geoip"] = True
+        offers, last_html_bytes, blocked = crawl_once(kwargs, target_url, args, detector)
+        any_blocked = any_blocked or blocked
+        if offers:
+            all_offers = offers
+            break
+        label = "proxy" if proxy else "direct"
+        state = "blocked" if blocked else "empty"
+        tail = "retrying" if i < len(attempts) else "giving up"
+        print(f"(attempt {i}/{len(attempts)} via {label} -> {state}; {tail})", file=sys.stderr)
+
     if not all_offers:
+        if any_blocked:
+            print(f"blocked by DataDome after {len(attempts)} attempt(s)", file=sys.stderr)
+            return EXIT_CHALLENGED
         print(f"no product cards found on {last_html_bytes}-byte page", file=sys.stderr)
         return EXIT_EMPTY
 
