@@ -38,6 +38,26 @@ func TestCommandBuilderWithComments(t *testing.T) {
 	}
 }
 
+func TestCommandBuilderWithProxyFile(t *testing.T) {
+	s := NewSubprocess(Config{
+		Python:    "/venv/bin/python",
+		Script:    "fetch.py",
+		ProxyFile: "/etc/allegro/proxies.txt",
+	})
+	_, args := s.command(FetchParams{URL: "https://allegro.pl/listing?string=laptop"})
+	if !containsPair(args, "--proxy-file", "/etc/allegro/proxies.txt") {
+		t.Fatalf("expected --proxy-file in args: %v", args)
+	}
+}
+
+func TestCommandBuilderProxyFileUnexpanded(t *testing.T) {
+	s := NewSubprocess(Config{Python: "/venv/bin/python", Script: "fetch.py", ProxyFile: "${ALLEGRO_PROXY_FILE}"})
+	_, args := s.command(FetchParams{URL: "https://allegro.pl/listing?string=laptop"})
+	if containsFlag(args, "--proxy-file") {
+		t.Fatalf("unexpanded ${...} proxy file must be skipped: %v", args)
+	}
+}
+
 func TestCommandBuilderWithoutComments(t *testing.T) {
 	s := NewSubprocess(Config{Python: "/venv/bin/python", Script: "fetch.py"})
 	_, args := s.command(FetchParams{URL: "https://allegro.pl/listing?string=laptop"})

@@ -24,6 +24,8 @@ import argparse
 import json
 import os
 import platform
+import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -41,7 +43,17 @@ import numpy as np  # noqa: E402
 from camoufox.sync_api import Camoufox  # noqa: E402
 from captcha_solver import YOLO26CaptchaDetector, drag_slider  # noqa: E402
 
-BLOCK_MARKERS = ("captcha-delivery.com", "DataDome Device Check", "geo.captcha-delivery")
+BLOCK_MARKERS = (
+    "captcha-delivery.com",
+    "DataDome Device Check",
+    "geo.captcha-delivery",
+    "allegrocaptcha.com",
+)
+
+# Webshare-style proxy line: "host:port:user:pass" with an optional leading index.
+_PROXY_LINE_RE = re.compile(
+    r"^\s*(?:\d+\s+)?(?P<host>[^:\s]+):(?P<port>\d+):(?P<user>[^:\s]+):(?P<pw>[^:\s]+)\s*$"
+)
 MIN_LISTING_BYTES = 200_000
 EXIT_OK, EXIT_CHALLENGED, EXIT_EMPTY, EXIT_USAGE = 0, 2, 3, 4
 
@@ -376,6 +388,32 @@ def host_os_name() -> str:
     return "windows"
 
 
+def parse_proxy_line(line: str) -> str | None:
+    """Convert a Webshare "host:port:user:pass" line (optional leading index)
+    into a "http://user:pass@host:port" URL. Returns None for blank/bad lines."""
+    m = _PROXY_LINE_RE.match(line or "")
+    if not m:
+        return None
+    return f"http://{m['user']}:{m['pw']}@{m['host']}:{m['port']}"
+
+
+def load_proxies(path: str) -> list[str]:
+    """Load a Webshare-style proxy list file into proxy URLs, skipping bad
+    lines. Missing/unreadable file -> empty list (crawl proceeds direct)."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    out: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        url = parse_proxy_line(line)
+        if url:
+            out.append(url)
+    return out
+
+
 def build_proxy(proxy_url: str) -> dict[str, Any]:
     """Build a Playwright/Camoufox proxy dict from a proxy URL.
 
@@ -611,47 +649,16 @@ def build_page_url(base_url: str, page_no: int) -> str:
     return urlunparse(parsed._replace(query=new_query))
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Fetch Allegro listing URL(s) with Camoufox + YOLO26")
-    ap.add_argument("url", nargs="?", help="Allegro listing URL (e.g. https://allegro.pl/listing?string=laptop)")
-    ap.add_argument("--keyword", default="", help="Search keyword if URL is not provided")
-    ap.add_argument("--pages", type=int, default=1, help="Number of pages to crawl (default: 1)")
-    ap.add_argument("--max-items", type=int, default=0, help="Max offers to return (0 = unlimited)")
-    ap.add_argument("--profile", default="", help="Optional profile directory")
-    ap.add_argument("--proxy", default="", help="Optional proxy URL")
-    ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
-    ap.add_argument("--with-comments", action="store_true", help="Also scrape top product reviews per offer")
-    ap.add_argument("--max-comments", type=int, default=5, help="Max comments per product (default: 5)")
-    ap.add_argument("--max-comment-products", type=int, default=10,
-                    help="Max products to scrape comments for per run (default: 10)")
-    ap.add_argument("--comment-budget-seconds", type=int, default=150,
-                    help="Wall-clock budget for the whole comment phase (default: 150)")
-    args = ap.parse_args()
-
-    target_url = args.url
-    if not target_url and args.keyword:
-        target_url = f"https://allegro.pl/listing?{urlencode({'string': args.keyword})}"
-    if not target_url:
-        print("error: either url or --keyword is required", file=sys.stderr)
-        return EXIT_USAGE
-
-    detector = YOLO26CaptchaDetector()
-    target_os = host_os_name()
-
-    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower()
-    headless = False if args.headed else (headless_env not in ("0", "false", "no"))
-
-    camoufox_kwargs: dict[str, Any] = {
-        "headless": headless,
-        "os": target_os,
-        "humanize": True,
-    }
-    if args.proxy:
-        camoufox_kwargs["proxy"] = build_proxy(args.proxy)
-        camoufox_kwargs["geoip"] = True
-
+def crawl_once(
+    camoufox_kwargs: dict[str, Any], target_url: str, args: Any, detector: YOLO26CaptchaDetector
+) -> tuple[list[dict[str, Any]], int, bool]:
+    """One crawl attempt with a single browser/proxy context: fetch listing
+    page(s), extract offers, then (optionally) per-product comments. Returns
+    (offers, last_html_bytes, blocked). `blocked` is True if DataDome challenged
+    the listing with no offers collected, so the caller can retry a new proxy."""
     all_offers: list[dict[str, Any]] = []
     last_html_bytes = 0
+    blocked = False
 
     with Camoufox(**camoufox_kwargs) as browser:
         page = browser.new_page()
@@ -667,8 +674,9 @@ def main() -> int:
 
             if is_blocked(html):
                 print(f"blocked by DataDome on page {page_no} ({len(html)} bytes)", file=sys.stderr)
+                blocked = True
                 if not all_offers:
-                    return EXIT_CHALLENGED
+                    return all_offers, last_html_bytes, blocked
                 break
 
             if page_no == 1:
@@ -703,7 +711,88 @@ def main() -> int:
                     page, o["url"], args.max_comments, detector
                 )
 
+    return all_offers, last_html_bytes, blocked
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Fetch Allegro listing URL(s) with Camoufox + YOLO26")
+    ap.add_argument("url", nargs="?", help="Allegro listing URL (e.g. https://allegro.pl/listing?string=laptop)")
+    ap.add_argument("--keyword", default="", help="Search keyword if URL is not provided")
+    ap.add_argument("--pages", type=int, default=1, help="Number of pages to crawl (default: 1)")
+    ap.add_argument("--max-items", type=int, default=0, help="Max offers to return (0 = unlimited)")
+    ap.add_argument("--profile", default="", help="Optional profile directory")
+    ap.add_argument("--proxy", default="", help="Optional single proxy URL")
+    ap.add_argument("--proxy-file", default="", help="Webshare-style proxy list file for random rotation")
+    ap.add_argument("--proxy-retries", type=int, default=5,
+                    help="Max proxies to try from the pool on block (default: 5)")
+    ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
+    ap.add_argument("--with-comments", action="store_true", help="Also scrape top product reviews per offer")
+    ap.add_argument("--max-comments", type=int, default=5, help="Max comments per product (default: 5)")
+    ap.add_argument("--max-comment-products", type=int, default=10,
+                    help="Max products to scrape comments for per run (default: 10)")
+    ap.add_argument("--comment-budget-seconds", type=int, default=150,
+                    help="Wall-clock budget for the whole comment phase (default: 150)")
+    args = ap.parse_args()
+
+    target_url = args.url
+    if not target_url and args.keyword:
+        target_url = f"https://allegro.pl/listing?{urlencode({'string': args.keyword})}"
+    if not target_url:
+        print("error: either url or --keyword is required", file=sys.stderr)
+        return EXIT_USAGE
+
+    detector = YOLO26CaptchaDetector()
+    target_os = host_os_name()
+
+    headless_env = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower()
+    headless = False if args.headed else (headless_env not in ("0", "false", "no"))
+
+    base_kwargs: dict[str, Any] = {
+        "headless": headless,
+        "os": target_os,
+        "humanize": True,
+    }
+
+    # Build the ordered list of proxy attempts. A proxy file (Webshare-style)
+    # enables random rotation with retry-on-block; a single --proxy is used as-is;
+    # otherwise we crawl direct (one attempt).
+    proxies: list[str] = []
+    if args.proxy_file:
+        proxies = load_proxies(args.proxy_file)
+        if not proxies:
+            print(f"(proxy file '{args.proxy_file}' empty/unreadable; crawling direct)", file=sys.stderr)
+    elif args.proxy:
+        proxies = [args.proxy]
+
+    if proxies:
+        random.shuffle(proxies)
+        attempts: list[str | None] = proxies[: max(1, args.proxy_retries)]
+    else:
+        attempts = [None]
+
+    all_offers: list[dict[str, Any]] = []
+    last_html_bytes = 0
+    any_blocked = False
+
+    for i, proxy in enumerate(attempts, 1):
+        kwargs = dict(base_kwargs)
+        if proxy:
+            kwargs["proxy"] = build_proxy(proxy)
+            kwargs["geoip"] = True
+        offers, last_html_bytes, blocked = crawl_once(kwargs, target_url, args, detector)
+        any_blocked = any_blocked or blocked
+        if offers:
+            all_offers = offers
+            break
+        label = "proxy" if proxy else "direct"
+        state = "blocked" if blocked else "empty"
+        tail = "retrying" if i < len(attempts) else "giving up"
+        print(f"(attempt {i}/{len(attempts)} via {label} -> {state}; {tail})", file=sys.stderr)
+
     if not all_offers:
+        if any_blocked:
+            print(f"blocked by DataDome after {len(attempts)} attempt(s)", file=sys.stderr)
+            return EXIT_CHALLENGED
         print(f"no product cards found on {last_html_bytes}-byte page", file=sys.stderr)
         return EXIT_EMPTY
 

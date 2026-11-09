@@ -9,5 +9,7 @@ RabbitMQ:
 Allegro:
   Python: /app/venv/bin/python
   Script: /app/cmd/allegro-service/crawler/fetch.py
+  Proxy: ${ALLEGRO_PROXY}
+  ProxyFile: ${ALLEGRO_PROXY_FILE}
   Xvfb: false
   TimeoutSeconds: 300

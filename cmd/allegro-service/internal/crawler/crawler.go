@@ -85,6 +85,7 @@ type Config struct {
 	Script     string
 	ProfileDir string
 	Proxy      string
+	ProxyFile  string
 	Xvfb       bool
 }
 
@@ -155,6 +156,9 @@ func (s *Subprocess) command(params FetchParams) (string, []string) {
 	}
 	if s.Cfg.Proxy != "" && !strings.Contains(s.Cfg.Proxy, "${") {
 		args = append(args, "--proxy", s.Cfg.Proxy)
+	}
+	if s.Cfg.ProxyFile != "" && !strings.Contains(s.Cfg.ProxyFile, "${") {
+		args = append(args, "--proxy-file", s.Cfg.ProxyFile)
 	}
 
 	argv := append([]string{s.Cfg.Python}, args...)

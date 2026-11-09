@@ -206,9 +206,28 @@ RabbitMQ:
 Allegro:
   Python: /var/www/crawl_ecomerce_golang/scripts/camoufox-yolo-captcha/.venv/bin/python
   Script: cmd/allegro-service/crawler/fetch.py
+  Proxy: ${ALLEGRO_PROXY}          # 1 proxy tĩnh (tuỳ chọn)
+  ProxyFile: ${ALLEGRO_PROXY_FILE} # file proxy Webshare để xoay vòng (tuỳ chọn)
   Xvfb: false
   TimeoutSeconds: 300
 ```
+
+#### Vượt DataDome bằng proxy (Webshare)
+
+Allegro chặn IP datacenter/VPS bằng DataDome (trang interstitial ~2KB `allegrocaptcha.com`). Dùng proxy residential để vượt:
+
+- **`ProxyFile`** trỏ tới file Webshare (mỗi dòng `host:port:user:pass`). Service chọn **ngẫu nhiên 1 proxy**, nếu bị chặn thì **tự thử proxy kế tiếp** (tối đa `--proxy-retries`, mặc định 5). Đây là cách khuyến nghị.
+- **`Proxy`** dùng 1 proxy tĩnh duy nhất (không xoay vòng).
+- Không set gì → crawl trực tiếp (thường bị DataDome chặn trên VPS).
+
+CLI độc lập có proxy rotation:
+```bash
+./scripts/camoufox-yolo-captcha/.venv/bin/python cmd/allegro-service/crawler/fetch.py \
+  --keyword "laptop" --pages 1 --max-items 2 --with-comments \
+  --proxy-file "scripts/proxy-test/Webshare 100 proxies.txt" --proxy-retries 5
+```
+
+> Docker: set `ALLEGRO_PROXY_FILE` là path **trong container** và mount file proxy host vào đó (xem block `volumes` đã comment sẵn trong `docker-compose.yml`).
 
 ### Bước 4: Khởi chạy Service hoặc Chạy CLI độc lập
 

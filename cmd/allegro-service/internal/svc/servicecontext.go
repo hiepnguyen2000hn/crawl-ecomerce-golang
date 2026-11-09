@@ -28,6 +28,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			Script:     c.Allegro.Script,
 			ProfileDir: c.Allegro.ProfileDir,
 			Proxy:      c.Allegro.Proxy,
+			ProxyFile:  c.Allegro.ProxyFile,
 			Xvfb:       c.Allegro.Xvfb,
 		}),
 	}
