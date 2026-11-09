@@ -3,7 +3,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fetch import load_proxies, parse_proxy_line  # noqa: E402
+from fetch import load_proxies, parse_proxy_line, webshare_proxies_from_json  # noqa: E402
+
+
+def test_webshare_proxies_from_json_builds_urls_and_skips_invalid():
+    data = {
+        "results": [
+            {"proxy_address": "1.2.3.4", "port": 8080, "username": "u1", "password": "p1", "valid": True},
+            {"proxy_address": "5.6.7.8", "port": 9090, "username": "u2", "password": "p2", "valid": False},
+            {"proxy_address": "9.9.9.9", "port": 80, "username": "u3", "password": "p3"},
+            {"proxy_address": "", "port": 80, "username": "u4", "password": "p4", "valid": True},
+        ]
+    }
+    assert webshare_proxies_from_json(data) == [
+        "http://u1:p1@1.2.3.4:8080",
+        "http://u3:p3@9.9.9.9:80",
+    ]
+
+
+def test_webshare_proxies_from_json_empty_or_missing():
+    assert webshare_proxies_from_json({}) == []
+    assert webshare_proxies_from_json({"results": []}) == []
 
 
 def test_parse_proxy_line_webshare_format():

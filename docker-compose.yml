@@ -228,6 +228,9 @@ services:
       # Path INSIDE the container to a Webshare-style proxy list (host:port:user:pass).
       # Mount the host file via the volumes block below and point this at it.
       ALLEGRO_PROXY_FILE: ${ALLEGRO_PROXY_FILE:-}
+      # Webshare API key: fetch.py pulls the proxy pool from the Webshare API.
+      # Takes priority over ALLEGRO_PROXY_FILE; no file mount needed when set.
+      WEBSHARE_API_KEY: ${WEBSHARE_API_KEY:-}
     # volumes:
     #   - ${ALLEGRO_PROXY_FILE_HOST:-./scripts/proxy-test/Webshare 100 proxies.txt}:/app/proxies.txt:ro
     ports:

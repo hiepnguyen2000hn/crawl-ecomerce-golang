@@ -414,6 +414,41 @@ def load_proxies(path: str) -> list[str]:
     return out
 
 
+WEBSHARE_API_URL = "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100"
+
+
+def webshare_proxies_from_json(data: dict[str, Any]) -> list[str]:
+    """Parse a Webshare `/api/v2/proxy/list/` JSON response into proxy URLs,
+    skipping entries flagged invalid or missing any field. Pure/testable."""
+    out: list[str] = []
+    for r in data.get("results", []) or []:
+        if r.get("valid") is False:
+            continue
+        host = r.get("proxy_address")
+        port = r.get("port")
+        user = r.get("username")
+        pw = r.get("password")
+        if host and port and user and pw:
+            out.append(f"http://{user}:{pw}@{host}:{port}")
+    return out
+
+
+def fetch_webshare_proxies(api_key: str, url: str = WEBSHARE_API_URL, timeout: int = 20) -> list[str]:
+    """Fetch the proxy pool from the Webshare API using an API key. Network
+    failure -> empty list (caller falls back to file/single/direct)."""
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"Authorization": f"Token {api_key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"(webshare api error: {str(e)[:120]})", file=sys.stderr)
+        return []
+    return webshare_proxies_from_json(data)
+
+
 def build_proxy(proxy_url: str) -> dict[str, Any]:
     """Build a Playwright/Camoufox proxy dict from a proxy URL.
 
@@ -723,6 +758,8 @@ def main() -> int:
     ap.add_argument("--profile", default="", help="Optional profile directory")
     ap.add_argument("--proxy", default="", help="Optional single proxy URL")
     ap.add_argument("--proxy-file", default="", help="Webshare-style proxy list file for random rotation")
+    ap.add_argument("--proxy-api-key", default=os.getenv("WEBSHARE_API_KEY", ""),
+                    help="Webshare API key to fetch the proxy pool (default: env WEBSHARE_API_KEY)")
     ap.add_argument("--proxy-retries", type=int, default=5,
                     help="Max proxies to try from the pool on block (default: 5)")
     ap.add_argument("--headed", action="store_true", help="Show browser window (default is headless=True)")
@@ -753,15 +790,19 @@ def main() -> int:
         "humanize": True,
     }
 
-    # Build the ordered list of proxy attempts. A proxy file (Webshare-style)
-    # enables random rotation with retry-on-block; a single --proxy is used as-is;
-    # otherwise we crawl direct (one attempt).
+    # Build the proxy pool for random rotation + retry-on-block. Source priority:
+    # Webshare API key -> proxy file -> single --proxy -> direct. Each source only
+    # kicks in if the previous yielded nothing.
     proxies: list[str] = []
-    if args.proxy_file:
+    if args.proxy_api_key:
+        proxies = fetch_webshare_proxies(args.proxy_api_key)
+        if not proxies:
+            print("(webshare api returned no proxies; falling back)", file=sys.stderr)
+    if not proxies and args.proxy_file:
         proxies = load_proxies(args.proxy_file)
         if not proxies:
-            print(f"(proxy file '{args.proxy_file}' empty/unreadable; crawling direct)", file=sys.stderr)
-    elif args.proxy:
+            print(f"(proxy file '{args.proxy_file}' empty/unreadable; falling back)", file=sys.stderr)
+    if not proxies and args.proxy:
         proxies = [args.proxy]
 
     if proxies:
