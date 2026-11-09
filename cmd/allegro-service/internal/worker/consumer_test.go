@@ -1,6 +1,33 @@
 package worker
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestCommentsDefaults(t *testing.T) {
+	var m JobMessage
+	if err := json.Unmarshal([]byte(`{"job_id":"1"}`), &m); err != nil {
+		t.Fatal(err)
+	}
+	if !commentsEnabled(m) {
+		t.Fatal("default should enable comments when with_comments absent")
+	}
+	if commentsLimit(m) != 5 {
+		t.Fatalf("default limit want 5 got %d", commentsLimit(m))
+	}
+
+	var m2 JobMessage
+	if err := json.Unmarshal([]byte(`{"job_id":"1","with_comments":false,"max_comments":3}`), &m2); err != nil {
+		t.Fatal(err)
+	}
+	if commentsEnabled(m2) {
+		t.Fatal("explicit with_comments=false should disable")
+	}
+	if commentsLimit(m2) != 3 {
+		t.Fatalf("explicit limit want 3 got %d", commentsLimit(m2))
+	}
+}
 
 func TestResolveTargets(t *testing.T) {
 	c := &Consumer{}

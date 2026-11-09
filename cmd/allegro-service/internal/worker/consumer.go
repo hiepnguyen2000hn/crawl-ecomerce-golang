@@ -13,12 +13,28 @@ import (
 )
 
 type JobMessage struct {
-	JobID    string   `json:"job_id"`
-	Keyword  string   `json:"keyword,omitempty"`
-	URL      string   `json:"url,omitempty"`
-	URLs     []string `json:"urls,omitempty"`
-	Pages    int      `json:"pages,omitempty"`
-	MaxItems int      `json:"max_items,omitempty"`
+	JobID        string   `json:"job_id"`
+	Keyword      string   `json:"keyword,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	URLs         []string `json:"urls,omitempty"`
+	Pages        int      `json:"pages,omitempty"`
+	MaxItems     int      `json:"max_items,omitempty"`
+	WithComments *bool    `json:"with_comments,omitempty"`
+	MaxComments  int      `json:"max_comments,omitempty"`
+}
+
+// commentsEnabled defaults to true when with_comments is absent from the
+// message, so existing/older clients get comments now that the feature exists.
+func commentsEnabled(msg JobMessage) bool {
+	return msg.WithComments == nil || *msg.WithComments
+}
+
+// commentsLimit defaults to 5 comments per product when unset or non-positive.
+func commentsLimit(msg JobMessage) int {
+	if msg.MaxComments <= 0 {
+		return 5
+	}
+	return msg.MaxComments
 }
 
 type CompletedMessage struct {
@@ -62,9 +78,11 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 	for _, targetURL := range targets {
 		res, err := c.Crawler.Fetch(ctx, crawler.FetchParams{
-			URL:      targetURL,
-			Pages:    pages,
-			MaxItems: msg.MaxItems,
+			URL:          targetURL,
+			Pages:        pages,
+			MaxItems:     msg.MaxItems,
+			WithComments: commentsEnabled(msg),
+			MaxComments:  commentsLimit(msg),
 		})
 		if err != nil {
 			c.markFailed(ctx, msg.JobID)
@@ -87,7 +105,8 @@ func (c *Consumer) HandleMessage(body []byte) error {
 				page = 1
 			}
 
-			if _, err := c.DB.ExecContext(ctx,
+			var allegroRawID string
+			if err := c.DB.QueryRowContext(ctx,
 				`INSERT INTO allegro_raw (
 					job_id, offer_id, product_id, title, brand, model, condition, seller,
 					price, price_with_delivery, currency, rating, reviews_count, bought_recently,
@@ -98,14 +117,35 @@ func (c *Consumer) HandleMessage(body []byte) error {
 					$9, $10, $11, $12, $13, $14,
 					$15, $16, $17, $18, $19, $20, $21, $22,
 					$23, $24
-				)`,
+				) RETURNING id`,
 				msg.JobID, o.OfferID, o.ProductID, o.Title, o.Brand, o.Model, o.Condition, o.Seller,
 				o.Price, o.PriceWithDelivery, o.Currency, o.Rating, o.ReviewCount, o.BoughtRecently,
 				o.SuperSeller, o.Smart, o.Delivery, o.Sponsored, o.Position, page, o.ImageURL, o.URL,
 				specsJSON, raw,
-			); err != nil {
+			).Scan(&allegroRawID); err != nil {
 				c.markFailed(ctx, msg.JobID)
 				return fmt.Errorf("worker: insert allegro_raw: %w", err)
+			}
+
+			// Comments are best-effort: a failed insert must not fail the job.
+			for _, cm := range o.Comments {
+				cmRaw, err := json.Marshal(cm)
+				if err != nil {
+					cmRaw = []byte("{}")
+				}
+				if _, err := c.DB.ExecContext(ctx,
+					`INSERT INTO allegro_comments (
+						allegro_raw_id, job_id, offer_id, product_id, author, rating, content,
+						review_date, confirmed_purchase, helpful_count, pros, cons, position, raw
+					) VALUES (
+						$1, $2, $3, $4, $5, $6, $7,
+						$8, $9, $10, $11, $12, $13, $14
+					)`,
+					allegroRawID, msg.JobID, o.OfferID, o.ProductID, cm.Author, cm.Rating, cm.Content,
+					cm.ReviewDate, cm.ConfirmedPurchase, cm.HelpfulCount, cm.Pros, cm.Cons, cm.Position, cmRaw,
+				); err != nil {
+					fmt.Println("worker: insert allegro_comments error:", err)
+				}
 			}
 		}
 	}
