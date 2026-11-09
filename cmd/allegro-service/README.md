@@ -22,9 +22,12 @@ Client / Frontend
    │                                                   ├─► Gọi subprocess `cmd/allegro-service/crawler/fetch.py`
    │                                                   │     ├── Khởi chạy Camoufox (os="linux", headless=True, humanize=True)
    │                                                   │     ├── Vượt DataDome Interstitial / Giải Slider Captcha bằng YOLO26
-   │                                                   │     └── Bóc tách HTML DOM (<article>, <dl><dt><dd>, aria-label)
+   │                                                   │     ├── Bóc tách HTML DOM (<article>, <dl><dt><dd>, aria-label)
+   │                                                   │     └── (tuỳ chọn `--with-comments`) Mở từng product_url, bóc top-5
+   │                                                   │         opinie theo lượt "pomocna" — best-effort, lỗi không fail job
    │                                                   │
    │                                                   ├─► INSERT từng sản phẩm vào bảng `allegro_raw` (PostgreSQL)
+   │                                                   ├─► INSERT comment mỗi sản phẩm vào `allegro_comments`
    │                                                   ├─► UPDATE jobs SET status='crawled'
    │                                                   └─► Publish event `crawl.completed.allegro`
    │                                                               │
@@ -87,6 +90,26 @@ Bảng **`allegro_raw`** lưu trữ toàn bộ thông tin sản phẩm, nhà s�
 | `specs` | `JSONB` | **Thông số kỹ thuật bóc từ `<dl><dt><dd>`** | `{"Seria procesora": "AMD Ryzen 5", "Przekątna ekranu": "15.6\"", "Typ dysku twardego": "SSD"}` |
 | `raw` | `JSONB` | Toàn bộ JSON gốc của card sản phẩm | `{...}` |
 
+### Bảng `allegro_comments` (`db/migrations/000013_allegro_comments.up.sql`)
+
+Mỗi sản phẩm lấy tối đa **5 comment** (opinie), ưu tiên comment nhiều lượt "pomocna" nhất. Quan hệ 1-nhiều với `allegro_raw` (`ON DELETE CASCADE`).
+
+| Cột | Kiểu dữ liệu | Mô tả |
+|---|---|---|
+| `id` | `UUID` | Khóa chính |
+| `allegro_raw_id` | `UUID` | FK → `allegro_raw(id)` (sản phẩm) |
+| `job_id` | `UUID` | FK → `jobs(id)` |
+| `offer_id` / `product_id` | `TEXT` | Tham chiếu offer/sản phẩm Allegro |
+| `author` | `TEXT` | Tên người đánh giá (nếu có) |
+| `rating` | `NUMERIC` | Số sao của review (thang 5) |
+| `content` | `TEXT` | Nội dung review |
+| `review_date` | `TEXT` | Ngày đăng (vd `"8 września 2025"`) |
+| `confirmed_purchase` | `BOOLEAN` | Có huy hiệu "Opinia potwierdzona zakupem" |
+| `helpful_count` | `INTEGER` | Số lượt "pomocna" (dùng để xếp hạng) |
+| `pros` / `cons` | `TEXT` | Zalety / Wady (nếu có) |
+| `position` | `INTEGER` | Thứ tự trong 5 comment lấy được |
+| `raw` | `JSONB` | JSON gốc của comment |
+
 ---
 
 ## 4. API tích hợp qua `api-gateway` (`:8888`)
@@ -102,7 +125,9 @@ curl -X POST http://localhost:8888/jobs/allegro \
   -d '{
     "keyword": "laptop",
     "pages": 1,
-    "max_items": 30
+    "max_items": 30,
+    "with_comments": true,
+    "max_comments": 5
   }'
 
 # Cách 2: Crawl trực tiếp URL listing Allegro (có sẵn bộ lọc/sort)
@@ -121,6 +146,10 @@ curl -X POST http://localhost:8888/jobs/allegro \
   "job_id": "c4f1d2a8-7b12-4e9a-8d3e-1a2b3c4d5e6f"
 }
 ```
+
+> `with_comments` mặc định **bật** khi không truyền (job sẽ lấy thêm comment).
+> Gửi `"with_comments": false` để chỉ crawl listing như trước. `max_comments`
+> mặc định **5**.
 
 ### 4.2. Kiểm tra trạng thái & Kết quả Job (`GET /jobs/allegro/:id`)
 
