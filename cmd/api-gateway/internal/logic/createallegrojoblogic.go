@@ -44,12 +44,14 @@ func (l *CreateAllegroJobLogic) CreateAllegroJob(req *types.CreateAllegroJobRequ
 	}
 
 	msg, err := json.Marshal(map[string]interface{}{
-		"job_id":    jobID,
-		"keyword":   req.Keyword,
-		"url":       req.Url,
-		"urls":      req.Urls,
-		"pages":     req.Pages,
-		"max_items": req.MaxItems,
+		"job_id":        jobID,
+		"keyword":       req.Keyword,
+		"url":           req.Url,
+		"urls":          req.Urls,
+		"pages":         req.Pages,
+		"max_items":     req.MaxItems,
+		"with_comments": req.WithComments,
+		"max_comments":  req.MaxComments,
 	})
 	if err != nil {
 		return nil, err
