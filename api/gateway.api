@@ -177,6 +177,27 @@ type GetLinkedInJobResponse {
 	AiOutput  string `json:"ai_output"`
 }
 
+type GetLinkedInPostsRequest {
+	Id string `path:"id"`
+}
+
+type LinkedInPostItem {
+	PostId        string `json:"post_id"`
+	Url           string `json:"url"`
+	Content       string `json:"content"`
+	AuthorName    string `json:"author_name"`
+	AuthorUrl     string `json:"author_url"`
+	PostedAt      string `json:"posted_at"`
+	Likes         int32  `json:"likes"`
+	CommentsCount int32  `json:"comments_count"`
+	Shares        int32  `json:"shares"`
+	Raw           string `json:"raw"`
+}
+
+type GetLinkedInPostsResponse {
+	Posts []LinkedInPostItem `json:"posts"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -225,5 +246,8 @@ service gateway-api {
 
 	@handler GetLinkedInJob
 	get /jobs/linkedin/:id (GetLinkedInJobRequest) returns (GetLinkedInJobResponse)
+
+	@handler GetLinkedInPosts
+	get /jobs/linkedin/:id/posts (GetLinkedInPostsRequest) returns (GetLinkedInPostsResponse)
 }
 

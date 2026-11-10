@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LinkedInService_GetLinkedInJob_FullMethodName = "/linkedin.LinkedInService/GetLinkedInJob"
+	LinkedInService_GetLinkedInJob_FullMethodName   = "/linkedin.LinkedInService/GetLinkedInJob"
+	LinkedInService_GetLinkedInPosts_FullMethodName = "/linkedin.LinkedInService/GetLinkedInPosts"
 )
 
 // LinkedInServiceClient is the client API for LinkedInService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LinkedInServiceClient interface {
 	GetLinkedInJob(ctx context.Context, in *GetLinkedInJobRequest, opts ...grpc.CallOption) (*GetLinkedInJobResponse, error)
+	GetLinkedInPosts(ctx context.Context, in *GetLinkedInPostsRequest, opts ...grpc.CallOption) (*GetLinkedInPostsResponse, error)
 }
 
 type linkedInServiceClient struct {
@@ -47,11 +49,22 @@ func (c *linkedInServiceClient) GetLinkedInJob(ctx context.Context, in *GetLinke
 	return out, nil
 }
 
+func (c *linkedInServiceClient) GetLinkedInPosts(ctx context.Context, in *GetLinkedInPostsRequest, opts ...grpc.CallOption) (*GetLinkedInPostsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLinkedInPostsResponse)
+	err := c.cc.Invoke(ctx, LinkedInService_GetLinkedInPosts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LinkedInServiceServer is the server API for LinkedInService service.
 // All implementations must embed UnimplementedLinkedInServiceServer
 // for forward compatibility.
 type LinkedInServiceServer interface {
 	GetLinkedInJob(context.Context, *GetLinkedInJobRequest) (*GetLinkedInJobResponse, error)
+	GetLinkedInPosts(context.Context, *GetLinkedInPostsRequest) (*GetLinkedInPostsResponse, error)
 	mustEmbedUnimplementedLinkedInServiceServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedLinkedInServiceServer struct{}
 
 func (UnimplementedLinkedInServiceServer) GetLinkedInJob(context.Context, *GetLinkedInJobRequest) (*GetLinkedInJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetLinkedInJob not implemented")
+}
+func (UnimplementedLinkedInServiceServer) GetLinkedInPosts(context.Context, *GetLinkedInPostsRequest) (*GetLinkedInPostsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLinkedInPosts not implemented")
 }
 func (UnimplementedLinkedInServiceServer) mustEmbedUnimplementedLinkedInServiceServer() {}
 func (UnimplementedLinkedInServiceServer) testEmbeddedByValue()                         {}
@@ -104,6 +120,24 @@ func _LinkedInService_GetLinkedInJob_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LinkedInService_GetLinkedInPosts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLinkedInPostsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LinkedInServiceServer).GetLinkedInPosts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LinkedInService_GetLinkedInPosts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LinkedInServiceServer).GetLinkedInPosts(ctx, req.(*GetLinkedInPostsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LinkedInService_ServiceDesc is the grpc.ServiceDesc for LinkedInService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var LinkedInService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLinkedInJob",
 			Handler:    _LinkedInService_GetLinkedInJob_Handler,
+		},
+		{
+			MethodName: "GetLinkedInPosts",
+			Handler:    _LinkedInService_GetLinkedInPosts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
