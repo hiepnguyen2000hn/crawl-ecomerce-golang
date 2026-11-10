@@ -26,7 +26,7 @@ func TestLinkedInHTTPClient_SearchPosts(t *testing.T) {
 
 	db := testDB(t) // skips without APIFY_SLOTS_TEST_DSN
 	s := newStore(t, db, []string{"test-token"}, 5)
-	c := NewLinkedInHTTPClient("harvestapi/linkedin-post-search", NewRunner(srv.URL, s, time.Minute))
+	c := NewLinkedInHTTPClient("", NewRunner(srv.URL, s, time.Minute)) // "" -> default harvestapi~linkedin-post-search
 
 	res, err := c.SearchPosts(context.Background(), "job-1", LinkedInSearchParams{Keyword: "golang", MaxPosts: 5})
 	if err != nil {

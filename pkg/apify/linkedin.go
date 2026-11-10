@@ -55,7 +55,9 @@ type LinkedInHTTPClient struct {
 
 func NewLinkedInHTTPClient(actorID string, runner *Runner) *LinkedInHTTPClient {
 	if actorID == "" {
-		actorID = "harvestapi/linkedin-post-search"
+		// Apify addresses actors as username~actor-name in the API path
+		// (the website shows username/actor-name with a slash).
+		actorID = "harvestapi~linkedin-post-search"
 	}
 	return &LinkedInHTTPClient{actorID: actorID, runner: runner}
 }

@@ -8,6 +8,6 @@ RabbitMQ:
   Concurrency: 10
 Apify:
   ApiToken: ${APIFY_API_TOKEN}
-  ActorID: harvestapi/linkedin-post-search
+  ActorID: harvestapi~linkedin-post-search
   BaseURL: https://api.apify.com/v2
   MaxConcurrencyPerToken: 5
