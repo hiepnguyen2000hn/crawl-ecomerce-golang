@@ -20,3 +20,5 @@ RedditApiRpc:
   Target: 127.0.0.1:8088
 AllegroRpc:
   Target: 127.0.0.1:8089
+LinkedInRpc:
+  Target: 127.0.0.1:8092

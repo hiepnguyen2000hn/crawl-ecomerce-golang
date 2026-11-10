@@ -151,6 +151,32 @@ type GetAllegroJobResponse {
 	AiOutput     string `json:"ai_output"`
 }
 
+type CreateLinkedInJobRequest {
+	Keyword          string   `json:"keyword"`
+	MaxPosts         int      `json:"max_posts,optional"`
+	Pages            int      `json:"pages,optional"`
+	SortBy           string   `json:"sort_by,optional"`
+	PostedLimit      string   `json:"posted_limit,optional"`
+	AuthorUrls       []string `json:"author_urls,optional"`
+	AuthorsCompanies []string `json:"authors_companies,optional"`
+	AuthorKeywords   string   `json:"author_keywords,optional"`
+	ContentType      string   `json:"content_type,optional"`
+}
+
+type CreateLinkedInJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetLinkedInJobRequest {
+	Id string `path:"id"`
+}
+
+type GetLinkedInJobResponse {
+	Status    string `json:"status"`
+	PostCount int32  `json:"post_count"`
+	AiOutput  string `json:"ai_output"`
+}
+
 service gateway-api {
 	@handler CreateTrendJob
 	post /jobs/trend (CreateTrendJobRequest) returns (CreateTrendJobResponse)
@@ -193,5 +219,11 @@ service gateway-api {
 
 	@handler GetAllegroJob
 	get /jobs/allegro/:id (GetAllegroJobRequest) returns (GetAllegroJobResponse)
+
+	@handler CreateLinkedInJob
+	post /jobs/linkedin (CreateLinkedInJobRequest) returns (CreateLinkedInJobResponse)
+
+	@handler GetLinkedInJob
+	get /jobs/linkedin/:id (GetLinkedInJobRequest) returns (GetLinkedInJobResponse)
 }
 
