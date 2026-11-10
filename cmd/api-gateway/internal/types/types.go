@@ -3,6 +3,8 @@
 
 package types
 
+import "encoding/json"
+
 type CreateAmazonJobRequest struct {
 	Keyword  string   `json:"keyword,optional"`
 	Urls     []string `json:"urls,optional"`
@@ -178,4 +180,25 @@ type GetLinkedInJobResponse struct {
 	Status    string `json:"status"`
 	PostCount int32  `json:"post_count"`
 	AiOutput  string `json:"ai_output"`
+}
+
+type GetLinkedInPostsRequest struct {
+	Id string `path:"id"`
+}
+
+type LinkedInPostItem struct {
+	PostId        string          `json:"post_id"`
+	Url           string          `json:"url"`
+	Content       string          `json:"content"`
+	AuthorName    string          `json:"author_name"`
+	AuthorUrl     string          `json:"author_url"`
+	PostedAt      string          `json:"posted_at"`
+	Likes         int32           `json:"likes"`
+	CommentsCount int32           `json:"comments_count"`
+	Shares        int32           `json:"shares"`
+	Raw           json.RawMessage `json:"raw"`
+}
+
+type GetLinkedInPostsResponse struct {
+	Posts []LinkedInPostItem `json:"posts"`
 }

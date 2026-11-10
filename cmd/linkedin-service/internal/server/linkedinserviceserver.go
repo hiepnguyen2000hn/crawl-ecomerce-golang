@@ -26,3 +26,8 @@ func (s *LinkedInServiceServer) GetLinkedInJob(ctx context.Context, in *linkedin
 	l := logic.NewGetLinkedInJobLogic(ctx, s.svcCtx)
 	return l.GetLinkedInJob(in)
 }
+
+func (s *LinkedInServiceServer) GetLinkedInPosts(ctx context.Context, in *linkedin.GetLinkedInPostsRequest) (*linkedin.GetLinkedInPostsResponse, error) {
+	l := logic.NewGetLinkedInPostsLogic(ctx, s.svcCtx)
+	return l.GetLinkedInPosts(in)
+}
