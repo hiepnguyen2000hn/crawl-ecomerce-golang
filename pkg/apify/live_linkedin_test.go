@@ -20,9 +20,15 @@ import (
 //	APIFY_LIVE_TOKEN="$APIFY_API_TOKEN" \
 //	go test ./pkg/apify/ -run TestLive_LinkedIn -v -timeout 10m
 func TestLive_LinkedIn(t *testing.T) {
+	// Accept either APIFY_LIVE_TOKEN (explicit opt-in) or APIFY_API_TOKEN
+	// (the same name used in .env / docker-compose), so the token from the
+	// environment just works.
 	raw := os.Getenv("APIFY_LIVE_TOKEN")
 	if raw == "" {
-		t.Skip("APIFY_LIVE_TOKEN not set; skipping the live Apify test (it spends real credit)")
+		raw = os.Getenv("APIFY_API_TOKEN")
+	}
+	if raw == "" {
+		t.Skip("neither APIFY_LIVE_TOKEN nor APIFY_API_TOKEN set; skipping the live Apify test (it spends real credit)")
 	}
 	tokens := ParseTokens(raw)
 	if len(tokens) == 0 {
