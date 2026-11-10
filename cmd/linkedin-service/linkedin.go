@@ -1,0 +1,73 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/internal/config"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/internal/server"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/internal/svc"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/internal/worker"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/linkedin"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/apify"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/rabbitmq"
+
+	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/service"
+	"github.com/zeromicro/go-zero/zrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+)
+
+var configFile = flag.String("f", "etc/linkedin.yaml", "the config file")
+
+func main() {
+	flag.Parse()
+
+	var c config.Config
+	conf.MustLoad(*configFile, &c, conf.UseEnv())
+
+	// ParseTokens discards blanks and the unexpanded "${...}" placeholder
+	// go-zero leaves behind when the env var is missing.
+	if len(apify.ParseTokens(c.Apify.ApiToken)) == 0 {
+		panic("linkedin-service: APIFY_API_TOKEN is not set (one token, or several separated by commas)")
+	}
+
+	svcCtx := svc.NewServiceContext(c)
+
+	publisher, err := rabbitmq.NewPublisher(rabbitmq.Config{URL: c.RabbitMQ.URL, Exchange: c.RabbitMQ.Exchange})
+	if err != nil {
+		panic(err)
+	}
+
+	consumer, err := rabbitmq.NewConsumer(rabbitmq.Config{
+		URL:         c.RabbitMQ.URL,
+		Exchange:    c.RabbitMQ.Exchange,
+		Concurrency: c.RabbitMQ.Concurrency,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	w := &worker.Consumer{DB: svcCtx.DB, Apify: svcCtx.Apify, Publisher: publisher}
+	go func() {
+		if err := consumer.Consume(context.Background(), "linkedin.jobs", "linkedin.jobs", w.HandleMessage); err != nil {
+			fmt.Println("linkedin-service consumer stopped:", err)
+		}
+	}()
+
+	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
+		linkedin.RegisterLinkedInServiceServer(grpcServer, server.NewLinkedInServiceServer(svcCtx))
+
+		if c.Mode == service.DevMode || c.Mode == service.TestMode {
+			reflection.Register(grpcServer)
+		}
+	})
+	defer s.Stop()
+
+	fmt.Printf("Starting linkedin-service rpc server at %s...\n", c.ListenOn)
+	serviceGroup := service.NewServiceGroup()
+	serviceGroup.Add(s)
+	serviceGroup.Start()
+}

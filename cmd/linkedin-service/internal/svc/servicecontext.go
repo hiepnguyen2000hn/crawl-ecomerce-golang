@@ -1,0 +1,39 @@
+package svc
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/internal/config"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/apify"
+	"github.com/hiepnv/crawl-ecomerce-golang/pkg/db"
+)
+
+type ServiceContext struct {
+	Config config.Config
+	DB     *sql.DB
+	Apify  apify.LinkedInClient
+}
+
+func NewServiceContext(c config.Config) *ServiceContext {
+	conn, err := db.Connect(c.Postgres.DSN)
+	if err != nil {
+		panic(err)
+	}
+
+	// Concurrency accounting lives in Postgres because every Apify-calling
+	// service shares one token pool; a per-process semaphore would let each
+	// service run the full per-account limit independently.
+	slots := apify.NewSlotStore(conn, apify.ParseTokens(c.Apify.ApiToken), "linkedin-service", 6*time.Minute)
+	if err := slots.SyncTokens(context.Background(), c.Apify.MaxConcurrencyPerToken); err != nil {
+		panic(fmt.Errorf("linkedin-service: register apify tokens: %w", err))
+	}
+
+	return &ServiceContext{
+		Config: c,
+		DB:     conn,
+		Apify:  apify.NewLinkedInHTTPClient(c.Apify.ActorID, apify.NewRunner(c.Apify.BaseURL, slots, 5*time.Minute)),
+	}
+}
