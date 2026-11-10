@@ -2,6 +2,7 @@ package apify
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -57,8 +58,24 @@ func TestLive_LinkedIn(t *testing.T) {
 	}
 	t.Logf("keyword %q -> %d post(s)", keyword, len(res.Posts))
 	for i, p := range res.Posts {
-		t.Logf("  [%d] id=%q author=%q postedAt=%q likes=%d comments=%d shares=%d url=%q rawBytes=%d",
-			i+1, p.PostID, p.AuthorName, p.PostedAt, p.Likes, p.Comments, p.Shares, p.URL, len(p.Raw))
+		content := p.Content
+		if len(content) > 120 {
+			content = content[:120] + "…"
+		}
+		t.Logf("  [%d] id=%q author=%q postedAt=%q likes=%d comments=%d shares=%d contentLen=%d\n       content=%q",
+			i+1, p.PostID, p.AuthorName, p.PostedAt, p.Likes, p.Comments, p.Shares, len(p.Content), content)
+	}
+	// Show every top-level field the actor returns, so we know what else could
+	// be normalized beyond what's stored in columns (raw already keeps it all).
+	if len(res.Posts) > 0 {
+		var top map[string]json.RawMessage
+		if err := json.Unmarshal(res.Posts[0].Raw, &top); err == nil {
+			keys := make([]string, 0, len(top))
+			for k := range top {
+				keys = append(keys, k)
+			}
+			t.Logf("actor top-level fields on post[0]: %v", keys)
+		}
 	}
 	if len(res.Posts) == 0 {
 		t.Fatal("no posts returned — check the keyword or actor availability")
