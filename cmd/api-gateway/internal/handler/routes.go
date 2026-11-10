@@ -84,6 +84,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/jobs/allegro/:id",
 				Handler: GetAllegroJobHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/jobs/linkedin",
+				Handler: CreateLinkedInJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/linkedin/:id",
+				Handler: GetLinkedInJobHandler(serverCtx),
+			},
 		},
 	)
 }

@@ -35,4 +35,7 @@ type Config struct {
 	AllegroRpc struct {
 		Target string `json:",default=127.0.0.1:8089"`
 	}
+	LinkedInRpc struct {
+		Target string `json:",default=127.0.0.1:8092"`
+	}
 }

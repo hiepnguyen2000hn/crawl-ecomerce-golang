@@ -153,3 +153,29 @@ type GetAllegroJobResponse struct {
 	ProductCount int32  `json:"product_count"`
 	AiOutput     string `json:"ai_output"`
 }
+
+type CreateLinkedInJobRequest struct {
+	Keyword          string   `json:"keyword"`
+	MaxPosts         int      `json:"max_posts,optional"`
+	Pages            int      `json:"pages,optional"`
+	SortBy           string   `json:"sort_by,optional"`
+	PostedLimit      string   `json:"posted_limit,optional"`
+	AuthorUrls       []string `json:"author_urls,optional"`
+	AuthorsCompanies []string `json:"authors_companies,optional"`
+	AuthorKeywords   string   `json:"author_keywords,optional"`
+	ContentType      string   `json:"content_type,optional"`
+}
+
+type CreateLinkedInJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
+type GetLinkedInJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetLinkedInJobResponse struct {
+	Status    string `json:"status"`
+	PostCount int32  `json:"post_count"`
+	AiOutput  string `json:"ai_output"`
+}

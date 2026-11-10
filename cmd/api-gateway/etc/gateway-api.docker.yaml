@@ -20,3 +20,5 @@ RedditApiRpc:
   Target: reddit-api-service:8088
 AllegroRpc:
   Target: allegro-service:8089
+LinkedInRpc:
+  Target: linkedin-service:8092

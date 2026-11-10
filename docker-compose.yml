@@ -237,6 +237,21 @@ services:
       - "8090:8089"
     restart: on-failure:5
 
+  linkedin-service:
+    build:
+      context: .
+      dockerfile: cmd/linkedin-service/Dockerfile
+    environment:
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .
@@ -259,6 +274,8 @@ services:
       reddit-api-service:
         condition: service_started
       allegro-service:
+        condition: service_started
+      linkedin-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully

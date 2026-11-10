@@ -11,6 +11,7 @@ import (
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/china1688-service/china1688"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/fbads"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/linkedin"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/reddit-api-service/redditapi"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/reddit-service/reddit"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/trend-service/trend"
@@ -31,6 +32,7 @@ type ServiceContext struct {
 	RedditRpc    reddit.RedditServiceClient
 	RedditApiRpc redditapi.RedditApiServiceClient
 	AllegroRpc   allegro.AllegroServiceClient
+	LinkedInRpc  linkedin.LinkedInServiceClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -70,6 +72,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+	linkedInGrpcConn, err := grpc.NewClient(c.LinkedInRpc.Target, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
 	return &ServiceContext{
 		Config:       c,
 		DB:           conn,
@@ -81,5 +87,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RedditRpc:    reddit.NewRedditServiceClient(redditGrpcConn),
 		RedditApiRpc: redditapi.NewRedditApiServiceClient(redditApiGrpcConn),
 		AllegroRpc:   allegro.NewAllegroServiceClient(allegroGrpcConn),
+		LinkedInRpc:  linkedin.NewLinkedInServiceClient(linkedInGrpcConn),
 	}
 }
