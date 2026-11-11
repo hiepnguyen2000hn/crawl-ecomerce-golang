@@ -252,6 +252,22 @@ services:
         condition: service_completed_successfully
     restart: on-failure:5
 
+  kalodata-service:
+    build:
+      context: .
+      dockerfile: cmd/kalodata-service/Dockerfile
+    environment:
+      # One Kalodata account's full Cookie header per line (login via farm_account).
+      KALODATA_COOKIES: ${KALODATA_COOKIES}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .
@@ -276,6 +292,8 @@ services:
       allegro-service:
         condition: service_started
       linkedin-service:
+        condition: service_started
+      kalodata-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully
