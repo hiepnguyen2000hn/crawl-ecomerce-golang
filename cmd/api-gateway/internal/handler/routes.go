@@ -94,6 +94,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/jobs/linkedin/:id",
 				Handler: GetLinkedInJobHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/jobs/kalodata",
+				Handler: CreateKalodataJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/kalodata/:id",
+				Handler: GetKalodataJobHandler(serverCtx),
+			},
 		},
 	)
 }

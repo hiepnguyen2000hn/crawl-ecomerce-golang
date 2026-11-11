@@ -179,3 +179,39 @@ type GetLinkedInJobResponse struct {
 	PostCount int32  `json:"post_count"`
 	AiOutput  string `json:"ai_output"`
 }
+
+type CreateKalodataJobRequest struct {
+	Country         string `json:"country,optional"`
+	StartDate       string `json:"start_date,optional"`
+	EndDate         string `json:"end_date,optional"`
+	PageNo          int    `json:"page_no,optional"`
+	PageSize        int    `json:"page_size,optional"`
+	SortField       string `json:"sort_field,optional"`
+	SortType        string `json:"sort_type,optional"`
+	CategoryIds     []int  `json:"category_ids,optional"`
+	Revenue         string `json:"revenue,optional"`
+	UnitPrice       string `json:"unit_price,optional"`
+	SalesChannel    string `json:"sales_channel,optional"`
+	CommissionRate  string `json:"commission_rate,optional"`
+	Creator         string `json:"creator,optional"`
+	WithProducts    *bool  `json:"with_products,optional"`
+	WithVideos      *bool  `json:"with_videos,optional"`
+	WithVideoDetail bool   `json:"with_video_detail,optional"`
+	VideoType       string `json:"video_type,optional"`
+	Duration        string `json:"duration,optional"`
+}
+
+type CreateKalodataJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
+type GetKalodataJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetKalodataJobResponse struct {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	VideoCount   int32  `json:"video_count"`
+	AiOutput     string `json:"ai_output"`
+}

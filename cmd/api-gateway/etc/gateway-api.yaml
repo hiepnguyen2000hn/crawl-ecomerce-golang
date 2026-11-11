@@ -22,3 +22,5 @@ AllegroRpc:
   Target: 127.0.0.1:8089
 LinkedInRpc:
   Target: 127.0.0.1:8092
+KalodataRpc:
+  Target: 127.0.0.1:8093

@@ -22,3 +22,5 @@ AllegroRpc:
   Target: allegro-service:8089
 LinkedInRpc:
   Target: linkedin-service:8092
+KalodataRpc:
+  Target: kalodata-service:8093
