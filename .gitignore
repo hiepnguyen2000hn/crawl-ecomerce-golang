@@ -15,3 +15,6 @@ __pycache__/
 
 # downloaded ad media (MEDIA_HOST_DIR default)
 /data/
+
+# Kalodata trial accounts (session cookies + proxies — secrets)
+cmd/kalodata-service/etc/kalodata_accounts.json

@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "email": "account1@hotmail.com",
+    "password": "optional-kalodata-password",
+    "session_cookie": "PASTE_SESSION_COOKIE_VALUE_HERE",
+    "device_id": "PASTE_DEVICE_ID_HERE",
+    "proxy": "http://user:pass@proxy-host:port"
+  },
+  {
+    "id": 2,
+    "email": "account2@hotmail.com",
+    "session_cookie": "...",
+    "device_id": "...",
+    "proxy": "http://user:pass@proxy-host:port"
+  }
+]

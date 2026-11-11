@@ -256,14 +256,11 @@ services:
     build:
       context: .
       dockerfile: cmd/kalodata-service/Dockerfile
-    environment:
-      # Primary: path INSIDE the container to kalodata_full_info.json
-      # (array of {session_cookie, device_id, proxy}). Mount it via volumes below.
-      KALODATA_ACCOUNTS_FILE: ${KALODATA_ACCOUNTS_FILE:-/app/kalodata_accounts.json}
-      # Fallback: one Cookie header per line (no proxy).
-      KALODATA_COOKIES: ${KALODATA_COOKIES:-}
+    # Accounts (session_cookie + device_id + proxy) are read from
+    # cmd/kalodata-service/etc/kalodata_accounts.json (git-ignored, baked into the
+    # image). Mounting it keeps it updatable (refresh cookies) without a rebuild.
     volumes:
-      - ${KALODATA_ACCOUNTS_FILE_HOST:-./kalodata_full_info.json}:/app/kalodata_accounts.json:ro
+      - ./cmd/kalodata-service/etc/kalodata_accounts.json:/etc/kalodata-service/kalodata_accounts.json:ro
     depends_on:
       postgres:
         condition: service_healthy

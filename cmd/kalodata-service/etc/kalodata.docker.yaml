@@ -9,7 +9,7 @@ RabbitMQ:
 Kalodata:
   BaseURL: https://www.kalodata.com
   CDNBase: https://img.kalocdn.com
-  AccountsFile: ${KALODATA_ACCOUNTS_FILE}
+  AccountsFile: /etc/kalodata-service/kalodata_accounts.json
   Cookies: ${KALODATA_COOKIES}
   CookieTTL: 168h
   DailySearchQuota: 10
