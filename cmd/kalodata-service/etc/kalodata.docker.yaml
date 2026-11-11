@@ -1,0 +1,16 @@
+Name: kalodata-service
+ListenOn: 0.0.0.0:8093
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+  Concurrency: 10
+Kalodata:
+  BaseURL: https://www.kalodata.com
+  CDNBase: https://img.kalocdn.com
+  Cookies: ${KALODATA_COOKIES}
+  CookieTTL: 168h
+  DailySearchQuota: 10
+  DailyDetailQuota: 10
+  Retries: 3
