@@ -38,4 +38,7 @@ type Config struct {
 	LinkedInRpc struct {
 		Target string `json:",default=127.0.0.1:8092"`
 	}
+	KalodataRpc struct {
+		Target string `json:",default=127.0.0.1:8093"`
+	}
 }

@@ -252,6 +252,24 @@ services:
         condition: service_completed_successfully
     restart: on-failure:5
 
+  kalodata-service:
+    build:
+      context: .
+      dockerfile: cmd/kalodata-service/Dockerfile
+    # Accounts (session_cookie + device_id + proxy) are read from
+    # cmd/kalodata-service/etc/kalodata_accounts.json (git-ignored, baked into the
+    # image). Mounting it keeps it updatable (refresh cookies) without a rebuild.
+    volumes:
+      - ./cmd/kalodata-service/etc/kalodata_accounts.json:/etc/kalodata-service/kalodata_accounts.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .
@@ -276,6 +294,8 @@ services:
       allegro-service:
         condition: service_started
       linkedin-service:
+        condition: service_started
+      kalodata-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully

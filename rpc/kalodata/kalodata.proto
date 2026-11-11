@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package kalodata;
+option go_package = "./kalodata";
+
+message GetKalodataJobRequest {
+  string job_id = 1;
+}
+
+message GetKalodataJobResponse {
+  string status = 1;
+  int32 product_count = 2;
+  int32 video_count = 3;
+  string ai_output = 4;
+}
+
+service KalodataService {
+  rpc GetKalodataJob(GetKalodataJobRequest) returns (GetKalodataJobResponse);
+}

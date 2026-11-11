@@ -11,6 +11,7 @@ import (
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/api-gateway/internal/config"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/china1688-service/china1688"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/fb-ads-service/fbads"
+	"github.com/hiepnv/crawl-ecomerce-golang/cmd/kalodata-service/kalodata"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/linkedin-service/linkedin"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/reddit-api-service/redditapi"
 	"github.com/hiepnv/crawl-ecomerce-golang/cmd/reddit-service/reddit"
@@ -33,6 +34,7 @@ type ServiceContext struct {
 	RedditApiRpc redditapi.RedditApiServiceClient
 	AllegroRpc   allegro.AllegroServiceClient
 	LinkedInRpc  linkedin.LinkedInServiceClient
+	KalodataRpc  kalodata.KalodataServiceClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -76,6 +78,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
+	kalodataGrpcConn, err := grpc.NewClient(c.KalodataRpc.Target, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
 	return &ServiceContext{
 		Config:       c,
 		DB:           conn,
@@ -88,5 +94,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RedditApiRpc: redditapi.NewRedditApiServiceClient(redditApiGrpcConn),
 		AllegroRpc:   allegro.NewAllegroServiceClient(allegroGrpcConn),
 		LinkedInRpc:  linkedin.NewLinkedInServiceClient(linkedInGrpcConn),
+		KalodataRpc:  kalodata.NewKalodataServiceClient(kalodataGrpcConn),
 	}
 }

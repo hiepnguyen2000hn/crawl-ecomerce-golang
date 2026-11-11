@@ -1,0 +1,9 @@
+{
+  "engine": "chrome",
+  "query": "laptop",
+  "pages_requested": 1,
+  "pages_fetched": 0,
+  "blocked": true,
+  "offers": [],
+  "block_reason": "DataDome blocked engine=chrome. See debug/blocked-p1.png. ENGINE=chrome is the combination measured to get through; on cloakbrowser, run `cloakbrowser login` for the newer v152 binary."
+}
