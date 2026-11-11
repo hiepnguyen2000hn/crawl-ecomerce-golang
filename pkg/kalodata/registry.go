@@ -9,8 +9,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 )
@@ -41,6 +43,43 @@ func ParseCookies(env string) []string {
 func CookieHash(cookie string) string {
 	sum := sha256.Sum256([]byte(cookie))
 	return hex.EncodeToString(sum[:])
+}
+
+// Account is one Kalodata trial account as stored in kalodata_full_info.json:
+// its session token, device id and residential proxy. The Cookie header sent to
+// Kalodata is "SESSION=<session_cookie>; deviceId=<device_id>" (verified live).
+type Account struct {
+	SessionCookie string `json:"session_cookie"`
+	DeviceID      string `json:"device_id"`
+	Proxy         string `json:"proxy"`
+}
+
+func (a Account) cookieHeader() string {
+	h := "SESSION=" + a.SessionCookie
+	if a.DeviceID != "" {
+		h += "; deviceId=" + a.DeviceID
+	}
+	return h
+}
+
+// LoadAccounts reads kalodata_full_info.json (array of accounts) and returns the
+// ones with a session cookie.
+func LoadAccounts(path string) ([]Account, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var accs []Account
+	if err := json.Unmarshal(data, &accs); err != nil {
+		return nil, fmt.Errorf("kalodata: parse accounts file: %w", err)
+	}
+	out := make([]Account, 0, len(accs))
+	for _, a := range accs {
+		if a.SessionCookie != "" {
+			out = append(out, a)
+		}
+	}
+	return out, nil
 }
 
 type CookieRegistry struct {
@@ -77,6 +116,25 @@ func (r *CookieRegistry) SyncCookies(ctx context.Context, cookies []string) erro
 type Lease struct {
 	ID     string
 	Cookie string
+	Proxy  string
+}
+
+// SyncAccounts registers accounts from kalodata_full_info.json. Identity is the
+// session token hash, so a re-login (new session) is a new live row with a fresh
+// 7-day clock; a re-synced session keeps its clock and dead flag (see note on
+// SyncCookies).
+func (r *CookieRegistry) SyncAccounts(ctx context.Context, accounts []Account) error {
+	for _, a := range accounts {
+		if _, err := r.db.ExecContext(ctx,
+			`INSERT INTO kalodata_cookies (cookie_hash, cookie, device_id, proxy, expires_at)
+			 VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
+			 ON CONFLICT (cookie_hash) DO NOTHING`,
+			CookieHash(a.SessionCookie), a.cookieHeader(), a.DeviceID, a.Proxy, r.ttl.Seconds(),
+		); err != nil {
+			return fmt.Errorf("kalodata: sync account: %w", err)
+		}
+	}
+	return nil
 }
 
 // Lease atomically picks a live, in-quota cookie for op ("search" or "detail")
@@ -105,6 +163,7 @@ func (r *CookieRegistry) Lease(ctx context.Context, op string) (*Lease, error) {
 	}
 
 	var l Lease
+	var proxy sql.NullString
 	err = tx.QueryRowContext(ctx,
 		fmt.Sprintf(`UPDATE kalodata_cookies SET %[1]s = %[1]s + 1, last_used_at = now()
 		 WHERE id = (
@@ -113,9 +172,10 @@ func (r *CookieRegistry) Lease(ctx context.Context, op string) (*Lease, error) {
 		   ORDER BY random() LIMIT 1
 		   FOR UPDATE SKIP LOCKED
 		 )
-		 RETURNING id, cookie`, col),
+		 RETURNING id, cookie, proxy`, col),
 		quota,
-	).Scan(&l.ID, &l.Cookie)
+	).Scan(&l.ID, &l.Cookie, &proxy)
+	l.Proxy = proxy.String
 	if err == sql.ErrNoRows {
 		var liveCount int
 		if err := tx.QueryRowContext(ctx,

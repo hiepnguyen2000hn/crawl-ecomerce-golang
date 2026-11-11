@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,14 +37,18 @@ type VideoParams struct {
 	Duration, CreatorFollowers  string
 }
 
+// Product/Video field types match the live Kalodata API: revenue/unit_price/
+// commission/views/duration are formatted display strings ("฿2.57m", "1%",
+// "103.14k", "44s"); GMV is the numeric product revenue; sale/rating are numeric.
 type Product struct {
 	ProductID      string
-	Title          string
-	Revenue        float64
-	Sales          int
-	Rating         float64
-	Price          float64
-	CommissionRate float64
+	Title          string  // product_title
+	Revenue        string  // "฿2.57m"
+	GMV            float64 // gmv_A (numeric)
+	Sales          int     // sale
+	Rating         float64 // product_rating
+	UnitPrice      string  // "฿18.77k"
+	CommissionRate string  // "1%"
 	ThumbnailURL   string
 	ProductURL     string
 	Raw            json.RawMessage
@@ -51,11 +57,11 @@ type Product struct {
 type Video struct {
 	VideoID      string
 	Handle       string
-	Title        string
-	Views        int
-	Revenue      float64
-	Sales        int
-	Duration     int
+	Title        string // description
+	Views        string // "103.14k"
+	Revenue      string // "฿1.14m"
+	Sales        int    // sale
+	Duration     string // "44s"
 	ThumbnailURL string
 	TikTokURL    string
 	Detail       json.RawMessage
@@ -75,6 +81,8 @@ type HTTPClient struct {
 	registry *CookieRegistry
 	retries  int
 	httpc    *http.Client
+	mu       sync.Mutex
+	proxied  map[string]*http.Client
 }
 
 func NewHTTPClient(baseURL, cdnBase string, reg *CookieRegistry, retries int) *HTTPClient {
@@ -93,6 +101,7 @@ func NewHTTPClient(baseURL, cdnBase string, reg *CookieRegistry, retries int) *H
 		registry: reg,
 		retries:  retries,
 		httpc:    &http.Client{Timeout: 30 * time.Second},
+		proxied:  map[string]*http.Client{},
 	}
 }
 
@@ -145,15 +154,16 @@ func mapProducts(raw []json.RawMessage, cdn string) []Product {
 	for _, r := range raw {
 		var m map[string]json.RawMessage
 		_ = json.Unmarshal(r, &m)
-		id := asStr(m, "id", "productId")
+		id := asStr(m, "id")
 		out = append(out, Product{
 			ProductID:      id,
-			Title:          asStr(m, "title", "name"),
-			Revenue:        asFloat(m, "revenue"),
-			Sales:          asInt(m, "sales", "soldCount"),
-			Rating:         asFloat(m, "rating"),
-			Price:          asFloat(m, "price", "unitPrice"),
-			CommissionRate: asFloat(m, "commissionRate"),
+			Title:          asStr(m, "product_title"),
+			Revenue:        asStr(m, "revenue"),
+			GMV:            asFloat(m, "gmv_A", "gmv"),
+			Sales:          asInt(m, "sale"),
+			Rating:         asFloat(m, "product_rating"),
+			UnitPrice:      asStr(m, "unit_price"),
+			CommissionRate: asStr(m, "commission_rate"),
 			ThumbnailURL:   productCover(cdn, id),
 			Raw:            r,
 		})
@@ -166,16 +176,16 @@ func mapVideos(raw []json.RawMessage, cdn string) []Video {
 	for _, r := range raw {
 		var m map[string]json.RawMessage
 		_ = json.Unmarshal(r, &m)
-		id := asStr(m, "id", "videoId")
+		id := asStr(m, "id")
 		handle := asStr(m, "handle")
 		v := Video{
 			VideoID:      id,
 			Handle:       handle,
-			Title:        asStr(m, "title", "caption", "description"),
-			Views:        asInt(m, "views", "playCount"),
-			Revenue:      asFloat(m, "revenue"),
-			Sales:        asInt(m, "sales", "soldCount"),
-			Duration:     asInt(m, "duration"),
+			Title:        asStr(m, "description", "title"),
+			Views:        asStr(m, "views"),
+			Revenue:      asStr(m, "revenue"),
+			Sales:        asInt(m, "sale"),
+			Duration:     asStr(m, "duration"),
 			ThumbnailURL: videoCover(cdn, id),
 			Raw:          r,
 		}
@@ -216,7 +226,7 @@ func (c *HTTPClient) postLeased(ctx context.Context, op, path string, payload an
 		}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 		c.setHeaders(req, lease.Cookie)
-		resp, err := c.httpc.Do(req)
+		resp, err := c.doVia(lease.Proxy, req)
 		if err != nil {
 			lastErr = err
 			continue
@@ -246,6 +256,27 @@ func (c *HTTPClient) postLeased(ctx context.Context, op, path string, payload an
 	return nil, lastErr
 }
 
+// doVia sends req through the account's residential proxy (empty = direct). A
+// per-proxy http.Client is cached so each account keeps its own egress IP.
+func (c *HTTPClient) doVia(proxy string, req *http.Request) (*http.Response, error) {
+	if proxy == "" {
+		return c.httpc.Do(req)
+	}
+	c.mu.Lock()
+	hc := c.proxied[proxy]
+	if hc == nil {
+		pu, err := url.Parse(proxy)
+		if err != nil {
+			c.mu.Unlock()
+			return nil, fmt.Errorf("kalodata: bad proxy %q: %w", proxy, err)
+		}
+		hc = &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{Proxy: http.ProxyURL(pu)}}
+		c.proxied[proxy] = hc
+	}
+	c.mu.Unlock()
+	return hc.Do(req)
+}
+
 func (c *HTTPClient) setHeaders(req *http.Request, cookie string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", cookie)
@@ -270,7 +301,7 @@ func (c *HTTPClient) AllLastDay(ctx context.Context, country string) (string, er
 	u := c.baseURL + "/api/allLastDay?" + url.Values{"country": {country}}.Encode()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	c.setHeaders(req, lease.Cookie)
-	resp, err := c.httpc.Do(req)
+	resp, err := c.doVia(lease.Proxy, req)
 	if err != nil {
 		return "", err
 	}
@@ -279,22 +310,20 @@ func (c *HTTPClient) AllLastDay(ctx context.Context, country string) (string, er
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("kalodata: allLastDay %d: %s", resp.StatusCode, trim(data))
 	}
+	// Shape (verified live): {"success":true,"data":[{"country":"VN","lastDay":"2026-11-10"},...]}
 	var env struct {
-		Data map[string]json.RawMessage `json:"data"`
+		Data []struct {
+			Country string `json:"country"`
+			LastDay string `json:"lastDay"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(data, &env)
-	if v, ok := env.Data[country]; ok {
-		var s string
-		if json.Unmarshal(v, &s) == nil {
-			return s, nil
+	for _, d := range env.Data {
+		if strings.EqualFold(d.Country, country) {
+			return d.LastDay, nil
 		}
 	}
-	// Some responses put the date directly under "data" as a string.
-	var flat struct {
-		Data string `json:"data"`
-	}
-	_ = json.Unmarshal(data, &flat)
-	return flat.Data, nil
+	return "", nil
 }
 
 func (c *HTTPClient) SearchProducts(ctx context.Context, p ProductParams) ([]Product, error) {

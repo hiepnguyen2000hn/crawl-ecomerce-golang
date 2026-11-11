@@ -4,13 +4,17 @@ ALTER TABLE jobs ADD CONSTRAINT jobs_type_check CHECK (
     type IN ('fbads', 'trend', 'amazon', 'china1688', 'reddit', 'reddit_api', 'allegro', 'linkedin', 'kalodata')
 );
 
--- Cookie registry: 7-day TTL (hard death) + per-day quota (10 search / 10 detail,
--- reset daily). Daily quota exhaustion rotates to another cookie; only TTL expiry
--- or auth rejection sets dead = true.
+-- Account/cookie registry: 7-day TTL (hard death) + per-day quota (10 search /
+-- 10 detail, reset daily). Each account carries a built Cookie header
+-- (SESSION=...; deviceId=...), its own device_id and residential proxy. Daily
+-- quota exhaustion rotates to another account; only TTL expiry or auth rejection
+-- sets dead = true.
 CREATE TABLE IF NOT EXISTS kalodata_cookies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cookie_hash TEXT UNIQUE NOT NULL,
     cookie TEXT NOT NULL,
+    device_id TEXT,
+    proxy TEXT,
     label TEXT,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL,
@@ -21,17 +25,21 @@ CREATE TABLE IF NOT EXISTS kalodata_cookies (
     last_used_at TIMESTAMPTZ
 );
 
+-- Kalodata returns revenue/price/commission as formatted display strings
+-- ("฿2.57m", "฿18.77k", "1%"); gmv is the numeric GMV. Columns match the actual
+-- API field types (verified live); raw keeps the full object.
 CREATE TABLE IF NOT EXISTS kalodata_products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES jobs(id),
     country TEXT,
     product_id TEXT,
     title TEXT,
-    revenue NUMERIC,
+    revenue TEXT,
+    gmv NUMERIC,
     sales INTEGER,
     rating NUMERIC,
-    price NUMERIC,
-    commission_rate NUMERIC,
+    unit_price TEXT,
+    commission_rate TEXT,
     thumbnail_url TEXT,
     product_url TEXT,
     raw JSONB NOT NULL,
@@ -46,10 +54,10 @@ CREATE TABLE IF NOT EXISTS kalodata_videos (
     video_id TEXT,
     handle TEXT,
     title TEXT,
-    views INTEGER,
-    revenue NUMERIC,
+    views TEXT,
+    revenue TEXT,
     sales INTEGER,
-    duration INTEGER,
+    duration TEXT,
     thumbnail_url TEXT,
     tiktok_url TEXT,
     detail JSONB,

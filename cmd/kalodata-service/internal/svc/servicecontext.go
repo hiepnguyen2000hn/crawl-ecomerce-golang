@@ -28,14 +28,28 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(fmt.Errorf("kalodata-service: CookieTTL=%q invalid: %w", c.Kalodata.CookieTTL, err))
 	}
 
-	cookies := kalodata.ParseCookies(c.Kalodata.Cookies)
-	if len(cookies) == 0 {
-		panic("kalodata-service: KALODATA_COOKIES is empty (one account's Cookie header per line)")
-	}
-
 	registry := kalodata.NewCookieRegistry(conn, ttl, c.Kalodata.DailySearchQuota, c.Kalodata.DailyDetailQuota)
-	if err := registry.SyncCookies(context.Background(), cookies); err != nil {
-		panic(fmt.Errorf("kalodata-service: sync cookies: %w", err))
+
+	// Primary: accounts file (session_cookie + device_id + proxy per account).
+	if c.Kalodata.AccountsFile != "" {
+		accounts, err := kalodata.LoadAccounts(c.Kalodata.AccountsFile)
+		if err != nil {
+			panic(fmt.Errorf("kalodata-service: load accounts %q: %w", c.Kalodata.AccountsFile, err))
+		}
+		if len(accounts) == 0 {
+			panic(fmt.Errorf("kalodata-service: accounts file %q has no usable accounts", c.Kalodata.AccountsFile))
+		}
+		if err := registry.SyncAccounts(context.Background(), accounts); err != nil {
+			panic(fmt.Errorf("kalodata-service: sync accounts: %w", err))
+		}
+	} else {
+		cookies := kalodata.ParseCookies(c.Kalodata.Cookies)
+		if len(cookies) == 0 {
+			panic("kalodata-service: set KALODATA_ACCOUNTS_FILE (kalodata_full_info.json) or KALODATA_COOKIES")
+		}
+		if err := registry.SyncCookies(context.Background(), cookies); err != nil {
+			panic(fmt.Errorf("kalodata-service: sync cookies: %w", err))
+		}
 	}
 
 	return &ServiceContext{

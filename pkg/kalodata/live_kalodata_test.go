@@ -21,14 +21,19 @@ import (
 // parse (any empty normalized field with non-empty raw means mapProducts/
 // mapVideos needs fixing).
 func TestLive_Kalodata(t *testing.T) {
-	cookies := ParseCookies(os.Getenv("KALODATA_COOKIES"))
-	if len(cookies) == 0 {
-		t.Skip("KALODATA_COOKIES not set; skipping the live Kalodata test")
+	file := os.Getenv("KALODATA_ACCOUNTS_FILE")
+	if file == "" {
+		t.Skip("KALODATA_ACCOUNTS_FILE not set; skipping the live Kalodata test")
 	}
+	accounts, err := LoadAccounts(file)
+	if err != nil {
+		t.Fatalf("LoadAccounts: %v", err)
+	}
+	t.Logf("loaded %d account(s) from %s", len(accounts), file)
 	db := testDB(t) // needs KALODATA_TEST_DSN, else skips
 	reg := NewCookieRegistry(db, 168*time.Hour, 10, 10)
-	if err := reg.SyncCookies(context.Background(), cookies); err != nil {
-		t.Fatalf("SyncCookies: %v", err)
+	if err := reg.SyncAccounts(context.Background(), accounts); err != nil {
+		t.Fatalf("SyncAccounts: %v", err)
 	}
 	client := NewHTTPClient("", "", reg, 3)
 
@@ -51,8 +56,8 @@ func TestLive_Kalodata(t *testing.T) {
 	}
 	t.Logf("products: %d", len(products))
 	for i, p := range products {
-		t.Logf("  [%d] id=%q title=%q revenue=%.1f sales=%d rating=%.2f rawBytes=%d",
-			i+1, p.ProductID, p.Title, p.Revenue, p.Sales, p.Rating, len(p.Raw))
+		t.Logf("  [%d] id=%q title=%q revenue=%q gmv=%.0f sales=%d rating=%.2f rawBytes=%d",
+			i+1, p.ProductID, p.Title, p.Revenue, p.GMV, p.Sales, p.Rating, len(p.Raw))
 	}
 	if len(products) > 0 {
 		var top map[string]json.RawMessage
@@ -73,6 +78,6 @@ func TestLive_Kalodata(t *testing.T) {
 	}
 	t.Logf("videos: %d", len(videos))
 	for i, v := range videos {
-		t.Logf("  [%d] id=%q handle=%q title=%q views=%d rawBytes=%d", i+1, v.VideoID, v.Handle, v.Title, v.Views, len(v.Raw))
+		t.Logf("  [%d] id=%q handle=%q title=%q views=%q revenue=%q rawBytes=%d", i+1, v.VideoID, v.Handle, v.Title, v.Views, v.Revenue, len(v.Raw))
 	}
 }

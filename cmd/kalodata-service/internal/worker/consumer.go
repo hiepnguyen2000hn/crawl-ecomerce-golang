@@ -179,11 +179,11 @@ func (c *Consumer) handleCrawlErr(ctx context.Context, jobID string, err error) 
 func (c *Consumer) insertProduct(ctx context.Context, jobID, country string, p kalodata.Product) error {
 	_, err := c.DB.ExecContext(ctx,
 		`INSERT INTO kalodata_products (
-			job_id, country, product_id, title, revenue, sales, rating, price,
-			commission_rate, thumbnail_url, product_url, raw
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		jobID, country, p.ProductID, p.Title, p.Revenue, p.Sales, p.Rating, p.Price,
-		p.CommissionRate, p.ThumbnailURL, p.ProductURL, p.Raw,
+			job_id, country, product_id, title, revenue, gmv, sales, rating,
+			unit_price, commission_rate, thumbnail_url, product_url, raw
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		jobID, country, p.ProductID, p.Title, p.Revenue, p.GMV, p.Sales, p.Rating,
+		p.UnitPrice, p.CommissionRate, p.ThumbnailURL, p.ProductURL, p.Raw,
 	)
 	return err
 }

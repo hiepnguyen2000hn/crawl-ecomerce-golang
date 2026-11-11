@@ -257,8 +257,13 @@ services:
       context: .
       dockerfile: cmd/kalodata-service/Dockerfile
     environment:
-      # One Kalodata account's full Cookie header per line (login via farm_account).
-      KALODATA_COOKIES: ${KALODATA_COOKIES}
+      # Primary: path INSIDE the container to kalodata_full_info.json
+      # (array of {session_cookie, device_id, proxy}). Mount it via volumes below.
+      KALODATA_ACCOUNTS_FILE: ${KALODATA_ACCOUNTS_FILE:-/app/kalodata_accounts.json}
+      # Fallback: one Cookie header per line (no proxy).
+      KALODATA_COOKIES: ${KALODATA_COOKIES:-}
+    volumes:
+      - ${KALODATA_ACCOUNTS_FILE_HOST:-./kalodata_full_info.json}:/app/kalodata_accounts.json:ro
     depends_on:
       postgres:
         condition: service_healthy
