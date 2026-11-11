@@ -49,12 +49,17 @@ func TestHandleMessage_SearchErrorForwardsDefaults(t *testing.T) {
 	}
 }
 
-func TestHandleMessage_QuotaExhaustedRequeues(t *testing.T) {
+func TestHandleMessage_QuotaExhaustedFailsNotRequeue(t *testing.T) {
+	// Quota exhaustion must NOT requeue: an immediate requeue busy-loops until
+	// the daily reset. The job fails (operator resubmits after reset).
 	fake := &fakeKalodata{productErr: kalodata.ErrQuotaExhausted}
 	c := &Consumer{Client: fake}
 	msg, _ := json.Marshal(JobMessage{JobID: "11111111-1111-1111-1111-111111111111"})
 	err := c.HandleMessage(msg)
-	if err == nil || !errors.Is(err, rabbitmq.ErrRequeue) {
-		t.Fatalf("want ErrRequeue, got %v", err)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if errors.Is(err, rabbitmq.ErrRequeue) {
+		t.Fatalf("quota exhaustion must not requeue (busy-loop); got %v", err)
 	}
 }

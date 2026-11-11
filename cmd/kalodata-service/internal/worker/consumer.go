@@ -58,6 +58,17 @@ func (c *Consumer) HandleMessage(body []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
+	// Idempotent re-run: a redelivered message (crash before ack) must not
+	// duplicate rows, so clear any prior rows for this job before inserting.
+	if c.DB != nil {
+		if _, err := c.DB.ExecContext(ctx, `DELETE FROM kalodata_products WHERE job_id = $1`, msg.JobID); err != nil {
+			return fmt.Errorf("worker: clear kalodata_products: %w", err)
+		}
+		if _, err := c.DB.ExecContext(ctx, `DELETE FROM kalodata_videos WHERE job_id = $1`, msg.JobID); err != nil {
+			return fmt.Errorf("worker: clear kalodata_videos: %w", err)
+		}
+	}
+
 	country := msg.Country
 	if country == "" {
 		country = "VN"
@@ -152,15 +163,14 @@ func (c *Consumer) HandleMessage(body []byte) error {
 	return nil
 }
 
-// handleCrawlErr maps a crawl error to a terminal action: ErrQuotaExhausted →
-// requeue (retry after daily reset); any other error → mark failed + return.
-// Returns nil to continue.
+// handleCrawlErr maps a crawl error to a terminal action. ErrQuotaExhausted and
+// ErrNoCookies both mark the job failed: the daily quota stays exhausted for
+// hours, and the rabbitmq wrapper requeues immediately (no delay), so requeuing
+// here would busy-loop against Postgres until the reset. Operator resubmits once
+// quota resets / fresh cookies are injected. Returns nil to continue.
 func (c *Consumer) handleCrawlErr(ctx context.Context, jobID string, err error) error {
 	if err == nil {
 		return nil
-	}
-	if errors.Is(err, kalodata.ErrQuotaExhausted) {
-		return fmt.Errorf("%w: %v", rabbitmq.ErrRequeue, err)
 	}
 	c.markFailed(ctx, jobID)
 	return fmt.Errorf("worker: kalodata crawl: %w", err)

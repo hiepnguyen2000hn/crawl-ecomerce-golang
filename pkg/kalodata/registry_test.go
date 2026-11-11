@@ -66,6 +66,26 @@ func TestSyncCookies_KeepsFirstSeenOnReSync(t *testing.T) {
 	}
 }
 
+func TestSyncCookies_DeadStaysDeadOnReSync(t *testing.T) {
+	db := testDB(t)
+	r := NewCookieRegistry(db, 168*time.Hour, 10, 10)
+	ctx := context.Background()
+	if err := r.SyncCookies(ctx, []string{"SESSION=x"}); err != nil {
+		t.Fatal(err)
+	}
+	// server rejected it (401) -> marked dead
+	db.Exec(`UPDATE kalodata_cookies SET dead = true WHERE cookie_hash = $1`, CookieHash("SESSION=x"))
+	// restart re-syncs the same env cookie; it must NOT be revived
+	if err := r.SyncCookies(ctx, []string{"SESSION=x"}); err != nil {
+		t.Fatal(err)
+	}
+	var dead bool
+	db.QueryRow(`SELECT dead FROM kalodata_cookies WHERE cookie_hash=$1`, CookieHash("SESSION=x")).Scan(&dead)
+	if !dead {
+		t.Fatal("re-sync revived a dead cookie; it must stay dead")
+	}
+}
+
 func TestLease_RotatesOnQuota(t *testing.T) {
 	db := testDB(t)
 	r := NewCookieRegistry(db, 168*time.Hour, 1, 1) // search quota 1

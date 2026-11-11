@@ -54,15 +54,18 @@ func NewCookieRegistry(db *sql.DB, ttl time.Duration, searchQuota, detailQuota i
 	return &CookieRegistry{db: db, ttl: ttl, searchQuota: searchQuota, detailQuota: detailQuota}
 }
 
-// SyncCookies upserts the env cookies. A new cookie starts its 7-day clock now;
-// a re-synced cookie keeps its first_seen_at/expires_at (restarting the service
-// must not reset the TTL) and is merely un-deadened in case it was retired.
+// SyncCookies registers env cookies. A new cookie (new hash) starts its 7-day
+// clock now. A re-synced cookie (same value → same hash) is left untouched: its
+// first_seen_at/expires_at (TTL) are preserved across restarts, and crucially a
+// cookie already MarkDead-ed by an auth rejection stays dead rather than being
+// revived every restart. To revive an account, inject a *fresh* cookie value
+// (new hash → new live row).
 func (r *CookieRegistry) SyncCookies(ctx context.Context, cookies []string) error {
 	for _, c := range cookies {
 		if _, err := r.db.ExecContext(ctx,
 			`INSERT INTO kalodata_cookies (cookie_hash, cookie, expires_at)
 			 VALUES ($1, $2, now() + make_interval(secs => $3))
-			 ON CONFLICT (cookie_hash) DO UPDATE SET cookie = EXCLUDED.cookie, dead = false`,
+			 ON CONFLICT (cookie_hash) DO NOTHING`,
 			CookieHash(c), c, r.ttl.Seconds(),
 		); err != nil {
 			return fmt.Errorf("kalodata: sync cookie: %w", err)

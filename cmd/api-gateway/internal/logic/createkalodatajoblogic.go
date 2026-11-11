@@ -59,6 +59,7 @@ func (l *CreateKalodataJobLogic) CreateKalodataJob(req *types.CreateKalodataJobR
 		"with_video_detail": req.WithVideoDetail,
 		"video_type":        req.VideoType,
 		"duration":          req.Duration,
+		"creator_followers": req.CreatorFollowers,
 	})
 	if err != nil {
 		return nil, err

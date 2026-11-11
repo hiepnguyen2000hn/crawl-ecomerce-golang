@@ -231,6 +231,11 @@ func (c *HTTPClient) postLeased(ctx context.Context, op, path string, payload an
 			_ = c.registry.MarkDead(ctx, lease.ID)
 			lastErr = fmt.Errorf("kalodata: %s %d (cookie retired)", path, resp.StatusCode)
 			continue
+		case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+			// Transient (rate limit / server error) → rotate to another cookie
+			// and retry rather than failing the whole job on a blip.
+			lastErr = fmt.Errorf("kalodata: %s %d (transient)", path, resp.StatusCode)
+			continue
 		default:
 			return nil, fmt.Errorf("kalodata: %s returned %d: %s", path, resp.StatusCode, trim(data))
 		}
