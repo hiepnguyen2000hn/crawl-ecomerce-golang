@@ -52,9 +52,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
+	client := kalodata.NewHTTPClient(c.Kalodata.BaseURL, c.Kalodata.CDNBase, registry, c.Kalodata.Retries)
+	client.SetLocale(c.Kalodata.Currency, c.Kalodata.Language)
+
 	return &ServiceContext{
 		Config: c,
 		DB:     conn,
-		Client: kalodata.NewHTTPClient(c.Kalodata.BaseURL, c.Kalodata.CDNBase, registry, c.Kalodata.Retries),
+		Client: client,
 	}
 }

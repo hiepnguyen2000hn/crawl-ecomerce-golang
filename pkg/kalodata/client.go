@@ -78,6 +78,8 @@ type Client interface {
 type HTTPClient struct {
 	baseURL  string
 	cdnBase  string
+	currency string
+	language string
 	registry *CookieRegistry
 	retries  int
 	httpc    *http.Client
@@ -98,10 +100,22 @@ func NewHTTPClient(baseURL, cdnBase string, reg *CookieRegistry, retries int) *H
 	return &HTTPClient{
 		baseURL:  baseURL,
 		cdnBase:  cdnBase,
+		currency: "USD",
+		language: "en-US",
 		registry: reg,
 		retries:  retries,
 		httpc:    &http.Client{Timeout: 30 * time.Second},
 		proxied:  map[string]*http.Client{},
+	}
+}
+
+// SetLocale overrides the currency/language headers (defaults USD / en-US).
+func (c *HTTPClient) SetLocale(currency, language string) {
+	if currency != "" {
+		c.currency = currency
+	}
+	if language != "" {
+		c.language = language
 	}
 }
 
@@ -213,7 +227,7 @@ func videoCover(cdn, id string) string {
 
 // postLeased POSTs payload to path, leasing a cookie for op and rotating on
 // cookie failure (401/403 → MarkDead, then try another). Returns the raw body.
-func (c *HTTPClient) postLeased(ctx context.Context, op, path string, payload any) ([]byte, error) {
+func (c *HTTPClient) postLeased(ctx context.Context, op, path, country string, payload any) ([]byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -225,7 +239,7 @@ func (c *HTTPClient) postLeased(ctx context.Context, op, path string, payload an
 			return nil, err // ErrNoCookies / ErrQuotaExhausted propagate
 		}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
-		c.setHeaders(req, lease.Cookie)
+		c.setHeaders(req, lease.Cookie, country)
 		resp, err := c.doVia(lease.Proxy, req)
 		if err != nil {
 			lastErr = err
@@ -235,6 +249,12 @@ func (c *HTTPClient) postLeased(ctx context.Context, op, path string, payload an
 		resp.Body.Close()
 		switch {
 		case resp.StatusCode == http.StatusOK:
+			if len(bytes.TrimSpace(data)) == 0 {
+				// Kalodata occasionally answers 200 with an empty body → rotate
+				// to another account and retry rather than failing to decode.
+				lastErr = fmt.Errorf("kalodata: %s empty 200 body", path)
+				continue
+			}
 			return data, nil
 		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 			// Cookie rejected (logged out / invalid) → retire it, try another.
@@ -277,9 +297,18 @@ func (c *HTTPClient) doVia(proxy string, req *http.Request) (*http.Response, err
 	return hc.Do(req)
 }
 
-func (c *HTTPClient) setHeaders(req *http.Request, cookie string) {
+// setHeaders sets the auth cookie plus the locale headers that actually select
+// the market: Kalodata reads the active country/currency/language from REQUEST
+// HEADERS (not the JSON payload — the payload country is ignored). So the job's
+// country drives the `country` header to crawl any market (VN, US, IT, ...).
+func (c *HTTPClient) setHeaders(req *http.Request, cookie, country string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", cookie)
+	if country != "" {
+		req.Header.Set("country", country)
+	}
+	req.Header.Set("currency", c.currency)
+	req.Header.Set("language", c.language)
 	req.Header.Set("Origin", c.baseURL)
 	req.Header.Set("Referer", c.baseURL+"/product")
 	req.Header.Set("User-Agent", userAgent)
@@ -300,7 +329,7 @@ func (c *HTTPClient) AllLastDay(ctx context.Context, country string) (string, er
 	}
 	u := c.baseURL + "/api/allLastDay?" + url.Values{"country": {country}}.Encode()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	c.setHeaders(req, lease.Cookie)
+	c.setHeaders(req, lease.Cookie, country)
 	resp, err := c.doVia(lease.Proxy, req)
 	if err != nil {
 		return "", err
@@ -345,7 +374,7 @@ func (c *HTTPClient) SearchProducts(ctx context.Context, p ProductParams) ([]Pro
 	putIf(payload, "creator", p.Creator)
 	putIf(payload, "launchDate", p.LaunchDate)
 
-	data, err := c.postLeased(ctx, "search", "/product/queryList", payload)
+	data, err := c.postLeased(ctx, "search", "/product/queryList", p.Country, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +399,7 @@ func (c *HTTPClient) SearchVideos(ctx context.Context, p VideoParams) ([]Video, 
 	putIf(payload, "duration", p.Duration)
 	putIf(payload, "creatorFollowers", p.CreatorFollowers)
 
-	data, err := c.postLeased(ctx, "search", "/video/queryList", payload)
+	data, err := c.postLeased(ctx, "search", "/video/queryList", p.Country, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +412,7 @@ func (c *HTTPClient) SearchVideos(ctx context.Context, p VideoParams) ([]Video, 
 
 func (c *HTTPClient) VideoDetail(ctx context.Context, country, id, start, end string) (json.RawMessage, error) {
 	payload := map[string]any{"id": id, "country": country, "startDate": start, "endDate": end}
-	data, err := c.postLeased(ctx, "detail", "/video/detail", payload)
+	data, err := c.postLeased(ctx, "detail", "/video/detail", country, payload)
 	if err != nil {
 		return nil, err
 	}

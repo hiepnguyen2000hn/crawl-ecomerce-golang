@@ -20,6 +20,10 @@ type Config struct {
 		AccountsFile string `json:",optional"`
 		// Fallback: env KALODATA_COOKIES, one Cookie header per line (no proxy).
 		Cookies          string `json:",optional"`
+		// Display locale sent as request headers. The job's country drives the
+		// `country` header (selects the market); currency/language are fixed here.
+		Currency         string `json:",default=USD"`
+		Language         string `json:",default=en-US"`
 		CookieTTL        string `json:",default=168h"`
 		DailySearchQuota int    `json:",default=10"`
 		DailyDetailQuota int    `json:",default=10"`
