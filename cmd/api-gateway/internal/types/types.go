@@ -3,6 +3,8 @@
 
 package types
 
+import "encoding/json"
+
 type CreateAmazonJobRequest struct {
 	Keyword  string   `json:"keyword,optional"`
 	Urls     []string `json:"urls,optional"`
@@ -181,21 +183,21 @@ type GetLinkedInJobResponse struct {
 }
 
 type CreateKalodataJobRequest struct {
-	Country         string `json:"country,optional"`
-	StartDate       string `json:"start_date,optional"`
-	EndDate         string `json:"end_date,optional"`
-	PageNo          int    `json:"page_no,optional"`
-	PageSize        int    `json:"page_size,optional"`
-	SortField       string `json:"sort_field,optional"`
-	SortType        string `json:"sort_type,optional"`
-	CategoryIds     []int  `json:"category_ids,optional"`
-	Revenue         string `json:"revenue,optional"`
-	UnitPrice       string `json:"unit_price,optional"`
-	SalesChannel    string `json:"sales_channel,optional"`
-	CommissionRate  string `json:"commission_rate,optional"`
-	Creator         string `json:"creator,optional"`
-	WithProducts    *bool  `json:"with_products,optional"`
-	WithVideos      *bool  `json:"with_videos,optional"`
+	Country          string `json:"country,optional"`
+	StartDate        string `json:"start_date,optional"`
+	EndDate          string `json:"end_date,optional"`
+	PageNo           int    `json:"page_no,optional"`
+	PageSize         int    `json:"page_size,optional"`
+	SortField        string `json:"sort_field,optional"`
+	SortType         string `json:"sort_type,optional"`
+	CategoryIds      []int  `json:"category_ids,optional"`
+	Revenue          string `json:"revenue,optional"`
+	UnitPrice        string `json:"unit_price,optional"`
+	SalesChannel     string `json:"sales_channel,optional"`
+	CommissionRate   string `json:"commission_rate,optional"`
+	Creator          string `json:"creator,optional"`
+	WithProducts     *bool  `json:"with_products,optional"`
+	WithVideos       *bool  `json:"with_videos,optional"`
 	WithVideoDetail  bool   `json:"with_video_detail,optional"`
 	VideoType        string `json:"video_type,optional"`
 	Duration         string `json:"duration,optional"`
@@ -215,4 +217,25 @@ type GetKalodataJobResponse struct {
 	ProductCount int32  `json:"product_count"`
 	VideoCount   int32  `json:"video_count"`
 	AiOutput     string `json:"ai_output"`
+}
+
+type GetLinkedInPostsRequest struct {
+	Id string `path:"id"`
+}
+
+type LinkedInPostItem struct {
+	PostId        string          `json:"post_id"`
+	Url           string          `json:"url"`
+	Content       string          `json:"content"`
+	AuthorName    string          `json:"author_name"`
+	AuthorUrl     string          `json:"author_url"`
+	PostedAt      string          `json:"posted_at"`
+	Likes         int32           `json:"likes"`
+	CommentsCount int32           `json:"comments_count"`
+	Shares        int32           `json:"shares"`
+	Raw           json.RawMessage `json:"raw"`
+}
+
+type GetLinkedInPostsResponse struct {
+	Posts []LinkedInPostItem `json:"posts"`
 }

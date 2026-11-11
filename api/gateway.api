@@ -178,21 +178,21 @@ type GetLinkedInJobResponse {
 }
 
 type CreateKalodataJobRequest {
-	Country         string `json:"country,optional"`
-	StartDate       string `json:"start_date,optional"`
-	EndDate         string `json:"end_date,optional"`
-	PageNo          int    `json:"page_no,optional"`
-	PageSize        int    `json:"page_size,optional"`
-	SortField       string `json:"sort_field,optional"`
-	SortType        string `json:"sort_type,optional"`
-	CategoryIds     []int  `json:"category_ids,optional"`
-	Revenue         string `json:"revenue,optional"`
-	UnitPrice       string `json:"unit_price,optional"`
-	SalesChannel    string `json:"sales_channel,optional"`
-	CommissionRate  string `json:"commission_rate,optional"`
-	Creator         string `json:"creator,optional"`
-	WithProducts    *bool  `json:"with_products,optional"`
-	WithVideos      *bool  `json:"with_videos,optional"`
+	Country          string `json:"country,optional"`
+	StartDate        string `json:"start_date,optional"`
+	EndDate          string `json:"end_date,optional"`
+	PageNo           int    `json:"page_no,optional"`
+	PageSize         int    `json:"page_size,optional"`
+	SortField        string `json:"sort_field,optional"`
+	SortType         string `json:"sort_type,optional"`
+	CategoryIds      []int  `json:"category_ids,optional"`
+	Revenue          string `json:"revenue,optional"`
+	UnitPrice        string `json:"unit_price,optional"`
+	SalesChannel     string `json:"sales_channel,optional"`
+	CommissionRate   string `json:"commission_rate,optional"`
+	Creator          string `json:"creator,optional"`
+	WithProducts     *bool  `json:"with_products,optional"`
+	WithVideos       *bool  `json:"with_videos,optional"`
 	WithVideoDetail  bool   `json:"with_video_detail,optional"`
 	VideoType        string `json:"video_type,optional"`
 	Duration         string `json:"duration,optional"`
@@ -212,6 +212,27 @@ type GetKalodataJobResponse {
 	ProductCount int32  `json:"product_count"`
 	VideoCount   int32  `json:"video_count"`
 	AiOutput     string `json:"ai_output"`
+}
+
+type GetLinkedInPostsRequest {
+	Id string `path:"id"`
+}
+
+type LinkedInPostItem {
+	PostId        string `json:"post_id"`
+	Url           string `json:"url"`
+	Content       string `json:"content"`
+	AuthorName    string `json:"author_name"`
+	AuthorUrl     string `json:"author_url"`
+	PostedAt      string `json:"posted_at"`
+	Likes         int32  `json:"likes"`
+	CommentsCount int32  `json:"comments_count"`
+	Shares        int32  `json:"shares"`
+	Raw           string `json:"raw"`
+}
+
+type GetLinkedInPostsResponse {
+	Posts []LinkedInPostItem `json:"posts"`
 }
 
 service gateway-api {
@@ -262,6 +283,9 @@ service gateway-api {
 
 	@handler GetLinkedInJob
 	get /jobs/linkedin/:id (GetLinkedInJobRequest) returns (GetLinkedInJobResponse)
+
+	@handler GetLinkedInPosts
+	get /jobs/linkedin/:id/posts (GetLinkedInPostsRequest) returns (GetLinkedInPostsResponse)
 
 	@handler CreateKalodataJob
 	post /jobs/kalodata (CreateKalodataJobRequest) returns (CreateKalodataJobResponse)
