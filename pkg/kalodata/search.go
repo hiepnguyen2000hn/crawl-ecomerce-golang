@@ -63,7 +63,7 @@ func searchArgs(script, currency string, a Account, p ProductParams, keyword str
 	}
 	pageSize := p.PageSize
 	if pageSize <= 0 {
-		pageSize = 20
+		pageSize = 10
 	}
 	args := []string{
 		script,

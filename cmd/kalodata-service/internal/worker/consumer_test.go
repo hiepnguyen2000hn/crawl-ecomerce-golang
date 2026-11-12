@@ -44,7 +44,7 @@ func TestHandleMessage_SearchErrorForwardsDefaults(t *testing.T) {
 		t.Fatal("expected error propagated")
 	}
 	p := fake.lastProd
-	if p.Country != "VN" || p.PageNo != 1 || p.PageSize != 20 || p.SortField != "revenue" || p.SortType != "DESC" {
+	if p.Country != "VN" || p.PageNo != 1 || p.PageSize != 10 || p.SortField != "revenue" || p.SortType != "DESC" {
 		t.Fatalf("defaults not applied: %+v", p)
 	}
 }

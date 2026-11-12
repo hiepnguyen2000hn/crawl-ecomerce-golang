@@ -112,7 +112,7 @@ def main() -> int:
     ap.add_argument("--start-date", default="")
     ap.add_argument("--end-date", default="")
     ap.add_argument("--pages", type=int, default=1)
-    ap.add_argument("--page-size", type=int, default=20)
+    ap.add_argument("--page-size", type=int, default=10)
     ap.add_argument("--headed", action="store_true")
     args = ap.parse_args()
 

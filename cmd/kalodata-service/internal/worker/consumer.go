@@ -81,7 +81,7 @@ func (c *Consumer) HandleMessage(body []byte) error {
 	}
 	pageSize := msg.PageSize
 	if pageSize <= 0 {
-		pageSize = 20
+		pageSize = 10
 	}
 	sortField := msg.SortField
 	if sortField == "" {
