@@ -41,6 +41,7 @@ func (l *CreateKalodataJobLogic) CreateKalodataJob(req *types.CreateKalodataJobR
 
 	msg, err := json.Marshal(map[string]interface{}{
 		"job_id":            jobID,
+		"keyword":           req.Keyword,
 		"country":           req.Country,
 		"start_date":        req.StartDate,
 		"end_date":          req.EndDate,

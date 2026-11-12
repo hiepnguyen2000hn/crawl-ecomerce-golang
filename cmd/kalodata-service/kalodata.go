@@ -43,7 +43,7 @@ func main() {
 		panic(err)
 	}
 
-	w := &worker.Consumer{DB: svcCtx.DB, Client: svcCtx.Client, Publisher: publisher}
+	w := &worker.Consumer{DB: svcCtx.DB, Client: svcCtx.Client, Searcher: svcCtx.Searcher, Publisher: publisher}
 	go func() {
 		if err := consumer.Consume(context.Background(), "kalodata.jobs", "kalodata.jobs", w.HandleMessage); err != nil {
 			fmt.Println("kalodata-service consumer stopped:", err)

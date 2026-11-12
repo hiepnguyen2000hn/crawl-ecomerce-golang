@@ -183,6 +183,7 @@ type GetLinkedInJobResponse struct {
 }
 
 type CreateKalodataJobRequest struct {
+	Keyword          string `json:"keyword,optional"`
 	Country          string `json:"country,optional"`
 	StartDate        string `json:"start_date,optional"`
 	EndDate          string `json:"end_date,optional"`

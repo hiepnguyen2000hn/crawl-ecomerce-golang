@@ -22,8 +22,12 @@ type Config struct {
 		Cookies          string `json:",optional"`
 		// Display locale sent as request headers. The job's country drives the
 		// `country` header (selects the market); currency/language are fixed here.
-		Currency         string `json:",default=USD"`
-		Language         string `json:",default=en-US"`
+		Currency string `json:",default=USD"`
+		Language string `json:",default=en-US"`
+		// Keyword search runs through a browser login (Camoufox) because
+		// /product/searchList rejects injected-cookie sessions.
+		Python           string `json:",default=/home/hiepnv/code/crawl-ecomerce-golang/scripts/camoufox-yolo-captcha/.venv/bin/python"`
+		SearchScript     string `json:",default=cmd/kalodata-service/crawler/search.py"`
 		CookieTTL        string `json:",default=168h"`
 		DailySearchQuota int    `json:",default=10"`
 		DailyDetailQuota int    `json:",default=10"`
