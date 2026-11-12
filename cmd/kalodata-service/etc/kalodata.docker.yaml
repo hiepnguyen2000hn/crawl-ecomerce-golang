@@ -14,4 +14,6 @@ Kalodata:
   CookieTTL: 168h
   DailySearchQuota: 10
   DailyDetailQuota: 10
+  Python: /app/venv/bin/python
+  SearchScript: /app/cmd/kalodata-service/crawler/search.py
   Retries: 3

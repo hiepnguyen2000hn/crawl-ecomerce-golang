@@ -12,9 +12,10 @@ import (
 )
 
 type ServiceContext struct {
-	Config config.Config
-	DB     *sql.DB
-	Client kalodata.Client
+	Config   config.Config
+	DB       *sql.DB
+	Client   kalodata.Client
+	Searcher *kalodata.BrowserSearcher
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -30,9 +31,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	registry := kalodata.NewCookieRegistry(conn, ttl, c.Kalodata.DailySearchQuota, c.Kalodata.DailyDetailQuota)
 
-	// Primary: accounts file (session_cookie + device_id + proxy per account).
+	// Primary: accounts file (email/password + session_cookie + device_id + proxy).
+	var accounts []kalodata.Account
 	if c.Kalodata.AccountsFile != "" {
-		accounts, err := kalodata.LoadAccounts(c.Kalodata.AccountsFile)
+		accounts, err = kalodata.LoadAccounts(c.Kalodata.AccountsFile)
 		if err != nil {
 			panic(fmt.Errorf("kalodata-service: load accounts %q: %w", c.Kalodata.AccountsFile, err))
 		}
@@ -55,9 +57,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	client := kalodata.NewHTTPClient(c.Kalodata.BaseURL, c.Kalodata.CDNBase, registry, c.Kalodata.Retries)
 	client.SetLocale(c.Kalodata.Currency, c.Kalodata.Language)
 
+	// Keyword search goes through a browser login (Camoufox) using the accounts'
+	// email+password; requires the accounts-file source.
+	searcher := kalodata.NewBrowserSearcher(c.Kalodata.Python, c.Kalodata.SearchScript, c.Kalodata.CDNBase, c.Kalodata.Currency, accounts)
+
 	return &ServiceContext{
-		Config: c,
-		DB:     conn,
-		Client: client,
+		Config:   c,
+		DB:       conn,
+		Client:   client,
+		Searcher: searcher,
 	}
 }

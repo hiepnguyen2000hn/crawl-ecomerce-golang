@@ -49,6 +49,8 @@ func CookieHash(cookie string) string {
 // its session token, device id and residential proxy. The Cookie header sent to
 // Kalodata is "SESSION=<session_cookie>; deviceId=<device_id>" (verified live).
 type Account struct {
+	Email         string `json:"email"`
+	Password      string `json:"password"`
 	SessionCookie string `json:"session_cookie"`
 	DeviceID      string `json:"device_id"`
 	Proxy         string `json:"proxy"`

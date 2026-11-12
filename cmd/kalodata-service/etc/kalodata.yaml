@@ -14,4 +14,6 @@ Kalodata:
   CookieTTL: 168h
   DailySearchQuota: 10
   DailyDetailQuota: 10
+  Python: /home/hiepnv/code/crawl-ecomerce-golang/scripts/camoufox-yolo-captcha/.venv/bin/python
+  SearchScript: cmd/kalodata-service/crawler/search.py
   Retries: 3

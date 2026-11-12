@@ -14,6 +14,7 @@ import (
 
 type JobMessage struct {
 	JobID            string `json:"job_id"`
+	Keyword          string `json:"keyword,omitempty"`
 	Country          string `json:"country,omitempty"`
 	StartDate        string `json:"start_date,omitempty"`
 	EndDate          string `json:"end_date,omitempty"`
@@ -44,6 +45,7 @@ type CompletedMessage struct {
 type Consumer struct {
 	DB        *sql.DB
 	Client    kalodata.Client
+	Searcher  *kalodata.BrowserSearcher
 	Publisher *rabbitmq.Publisher
 }
 
@@ -102,6 +104,25 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		}
 	}
 
+	// Keyword search goes through a browser login (searchList rejects
+	// injected-cookie sessions). It returns products only; videos/top-list are
+	// skipped for a keyword job.
+	if msg.Keyword != "" {
+		products, err := c.Searcher.Search(ctx, kalodata.ProductParams{
+			Country: country, StartDate: startDate, EndDate: endDate, PageNo: pageNo, PageSize: pageSize,
+		}, msg.Keyword)
+		if stop := c.handleCrawlErr(ctx, msg.JobID, err); stop != nil {
+			return stop
+		}
+		for _, p := range products {
+			if err := c.insertProduct(ctx, msg.JobID, country, p); err != nil {
+				c.markFailed(ctx, msg.JobID)
+				return fmt.Errorf("worker: insert kalodata_products: %w", err)
+			}
+		}
+		return c.finish(ctx, msg.JobID)
+	}
+
 	if enabled(msg.WithProducts) {
 		products, err := c.Client.SearchProducts(ctx, kalodata.ProductParams{
 			Country: country, StartDate: startDate, EndDate: endDate,
@@ -146,14 +167,18 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		}
 	}
 
+	return c.finish(ctx, msg.JobID)
+}
+
+// finish marks the job crawled and publishes the completion event.
+func (c *Consumer) finish(ctx context.Context, jobID string) error {
 	if _, err := c.DB.ExecContext(ctx,
-		`UPDATE jobs SET status = 'crawled', updated_at = now() WHERE id = $1`, msg.JobID,
+		`UPDATE jobs SET status = 'crawled', updated_at = now() WHERE id = $1`, jobID,
 	); err != nil {
-		c.markFailed(ctx, msg.JobID)
+		c.markFailed(ctx, jobID)
 		return fmt.Errorf("worker: update job status: %w", err)
 	}
-
-	payload, err := json.Marshal(CompletedMessage{JobID: msg.JobID})
+	payload, err := json.Marshal(CompletedMessage{JobID: jobID})
 	if err != nil {
 		return fmt.Errorf("worker: marshal completed message: %w", err)
 	}
