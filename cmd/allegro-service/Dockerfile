@@ -9,8 +9,12 @@ FROM python:3.12-slim
 
 # Camoufox downloads its own patched Firefox rather than using a distro build,
 # so install the shared libraries that binary links against -- not firefox-esr.
+# libgl1 + libglib2.0-0: ultralytics pulls full opencv-python which needs
+# libGL.so.1 (import cv2 fails without it even though opencv-python-headless
+# is also installed).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
+      libgl1 libglib2.0-0 \
       libgtk-3-0 libdbus-glib-1-2 libasound2 libx11-xcb1 libxtst6 \
       libxrandr2 libxcomposite1 libxdamage1 libxfixes3 libxcursor1 \
       libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libpango-1.0-0 \
