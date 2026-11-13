@@ -60,12 +60,17 @@ def do_login(page, email: str, password: str) -> bool:
 
     pw = page.query_selector("input[type='password'], input[placeholder*='Password']")
     if not pw or not pw.is_visible():
-        sw = page.query_selector("span:has-text('password'), a:has-text('password'), div:has-text('Log in with password')")
-        if sw:
-            sw.click()
-            time.sleep(1.5)
+        # Email login defaults to "Send code" (OTP) in some regions; switch to
+        # the password form via the exact "Log in with password" toggle.
+        for tsel in ("text=Log in with password", "a:text-is('Log in with password')",
+                     "span:text-is('Log in with password')"):
+            t = page.query_selector(tsel)
+            if t and t.is_visible():
+                t.click()
+                time.sleep(1.5)
+                break
         pw = page.query_selector("input[type='password'], input[placeholder*='Password']")
-    if not pw:
+    if not pw or not pw.is_visible():
         print("login: password field not available (OTP-only account?)", file=sys.stderr)
         return False
     pw.fill(password)
@@ -120,7 +125,10 @@ def main() -> int:
         print("error: --query is required", file=sys.stderr)
         return EXIT_USAGE
 
-    camoufox_kwargs = {"headless": not args.headed, "os": "linux", "humanize": True}
+    # Force an English UI (locale=en-US) regardless of the proxy's country —
+    # otherwise geoip spoofs the locale to the proxy geo (e.g. Thai) and the
+    # login selectors ('Email'/'Password'/'Log in') stop matching.
+    camoufox_kwargs = {"headless": not args.headed, "os": "linux", "humanize": True, "locale": "en-US"}
     proxy = build_proxy(args.proxy)
     if proxy:
         camoufox_kwargs["proxy"] = proxy
@@ -146,15 +154,22 @@ def main() -> int:
                 "pageSize": args.page_size,
                 "query": args.query,
             }
-            res = page.evaluate(SEARCH_JS, {"country": args.country.upper(), "currency": args.currency, "payload": payload})
-            if res["status"] != 200 or not res["body"].strip():
-                print(f"searchList page {page_no}: status {res['status']}, {len(res['body'])} bytes", file=sys.stderr)
-                break
-            try:
-                data = json.loads(res["body"]).get("data") or []
-            except Exception as e:
-                print(f"searchList page {page_no}: decode error {e}", file=sys.stderr)
-                break
+            # Kalodata intermittently answers 200 with an empty data array; retry
+            # the same page a few times before giving up.
+            data = []
+            for attempt in range(4):
+                res = page.evaluate(SEARCH_JS, {"country": args.country.upper(), "currency": args.currency, "payload": payload})
+                if res["status"] == 200 and res["body"].strip():
+                    try:
+                        data = json.loads(res["body"]).get("data") or []
+                    except Exception as e:
+                        print(f"searchList page {page_no}: decode error {e}", file=sys.stderr)
+                        data = []
+                if data:
+                    break
+                print(f"searchList page {page_no} attempt {attempt + 1}: status {res['status']}, {len(res['body'])} bytes, empty",
+                      file=sys.stderr)
+                page.wait_for_timeout(2000)
             if not data:
                 break
             all_items.extend(data)
