@@ -122,11 +122,11 @@ func (c *Consumer) HandleMessage(body []byte) error {
 			INSERT INTO pipiads_ads (
 				job_id, video_id, ad_id, keyword, title, description, app_name, advertiser_name,
 				platform, play_count, digg_count, comment_count, share_count,
-				cover_url, video_url, landing_page_url, first_seen_at, last_seen_at, raw
+				cover_url, video_url, landing_page_url, country, first_seen_at, last_seen_at, raw
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7, $8,
 				$9, $10, $11, $12, $13,
-				$14, $15, $16, $17, $18, $19
+				$14, $15, $16, $17, $18, $19, $20
 			)
 		`)
 		if err != nil {
@@ -139,10 +139,14 @@ func (c *Consumer) HandleMessage(body []byte) error {
 			if brand == "" {
 				brand = ad.AppName
 			}
+			country := ""
+			if len(ad.FetchRegion) > 0 {
+				country = ad.FetchRegion[0]
+			}
 			_, _ = stmt.ExecContext(ctx,
 				msg.JobID, ad.VideoID, ad.AdID, msg.Keyword, ad.Title, ad.Description, ad.AppName, brand,
 				ad.Platform, ad.PlayCount, ad.DiggCount, ad.CommentCount, ad.ShareCount,
-				ad.CoverURL, ad.VideoURL, ad.LandingPageURL, ad.FirstTime, ad.LastTime, ad.Raw,
+				ad.CoverURL, ad.VideoURL, ad.LandingPageURL, country, ad.FirstTime, ad.LastTime, ad.Raw,
 			)
 		}
 
