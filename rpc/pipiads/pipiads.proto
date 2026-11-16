@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package pipiads;
+option go_package = "./pipiads";
+
+message GetPipiadsJobRequest {
+  string job_id = 1;
+}
+
+message GetPipiadsJobResponse {
+  string status = 1;
+  int32 ads_count = 2;
+  string error_message = 3;
+}
+
+service PipiadsService {
+  rpc GetPipiadsJob(GetPipiadsJobRequest) returns (GetPipiadsJobResponse);
+}
