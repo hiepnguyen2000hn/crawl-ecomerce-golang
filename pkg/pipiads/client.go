@@ -49,12 +49,18 @@ type MemberUsage struct {
 }
 
 type SearchRequest struct {
-	Keyword     string `json:"search,omitempty"`
-	SearchType  int    `json:"search_type"`  // default 1
-	Sort        int    `json:"sort"`         // default 2 (Hot/Winning)
-	SortType    string `json:"sort_type"`    // default "desc"
-	CurrentPage int    `json:"current_page"` // default 1
-	PageSize    int    `json:"page_size"`    // default 20
+	Keyword        string                 `json:"search,omitempty"`
+	ExtendKeywords []ExtendKeywordRequest `json:"extend_keywords,omitempty"`
+	SearchType     int                    `json:"search_type"`  // default 1
+	Sort           int                    `json:"sort"`         // default 999 (Default) or 2 (Hot)
+	SortType       string                 `json:"sort_type"`    // default "desc"
+	CurrentPage    int                    `json:"current_page"` // default 1
+	PageSize       int                    `json:"page_size"`    // default 20
+}
+
+type ExtendKeywordRequest struct {
+	Type    int    `json:"type"`    // 1: Từ khóa quảng cáo
+	Keyword string `json:"keyword"`
 }
 
 type EcommerceAd struct {
@@ -223,7 +229,7 @@ func (c *HTTPClient) SearchEcommerceAds(ctx context.Context, account *Account, r
 		req.SearchType = 1
 	}
 	if req.Sort == 0 {
-		req.Sort = 2
+		req.Sort = 999
 	}
 	if req.SortType == "" {
 		req.SortType = "desc"
@@ -235,24 +241,33 @@ func (c *HTTPClient) SearchEcommerceAds(ctx context.Context, account *Account, r
 		req.PageSize = 20
 	}
 
+	extendKeywords := req.ExtendKeywords
+	if len(extendKeywords) == 0 && req.Keyword != "" {
+		extendKeywords = []ExtendKeywordRequest{
+			{Type: 1, Keyword: req.Keyword},
+		}
+	}
+
 	type searchPayload struct {
-		IsParticiple bool   `json:"is_participle"`
-		SearchType   int    `json:"search_type"`
-		Search       string `json:"search,omitempty"`
-		Sort         int    `json:"sort"`
-		SortType     string `json:"sort_type"`
-		CurrentPage  int    `json:"current_page"`
-		PageSize     int    `json:"page_size"`
+		IsParticiple   bool                   `json:"is_participle"`
+		SearchType     int                    `json:"search_type"`
+		Search         string                 `json:"search,omitempty"`
+		ExtendKeywords []ExtendKeywordRequest `json:"extend_keywords,omitempty"`
+		Sort           int                    `json:"sort"`
+		SortType       string                 `json:"sort_type"`
+		CurrentPage    int                    `json:"current_page"`
+		PageSize       int                    `json:"page_size"`
 	}
 
 	payload := searchPayload{
-		IsParticiple: false,
-		SearchType:   req.SearchType,
-		Search:       req.Keyword,
-		Sort:         req.Sort,
-		SortType:     req.SortType,
-		CurrentPage:  req.CurrentPage,
-		PageSize:     req.PageSize,
+		IsParticiple:   false,
+		SearchType:     req.SearchType,
+		Search:         req.Keyword,
+		ExtendKeywords: extendKeywords,
+		Sort:           req.Sort,
+		SortType:       req.SortType,
+		CurrentPage:    req.CurrentPage,
+		PageSize:       req.PageSize,
 	}
 
 	reqBytes, err := json.Marshal(payload)
