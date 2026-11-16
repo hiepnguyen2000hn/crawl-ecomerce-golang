@@ -18,3 +18,7 @@ __pycache__/
 
 # Kalodata trial accounts (session cookies + proxies — secrets)
 cmd/kalodata-service/etc/kalodata_accounts.json
+
+# PiPiAds trial accounts (session cookies + proxies — secrets)
+pipiads_accounts.json
+cmd/pipiads-service/etc/pipiads_accounts.json
