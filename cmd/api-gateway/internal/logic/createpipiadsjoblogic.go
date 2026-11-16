@@ -40,6 +40,10 @@ func (l *CreatePipiadsJobLogic) CreatePipiadsJob(req *types.CreatePipiadsJobRequ
 	msg, err := json.Marshal(map[string]interface{}{
 		"job_id":       jobID,
 		"keyword":      req.Keyword,
+		"country":      req.Country,
+		"countries":    req.Countries,
+		"language":     req.Language,
+		"languages":    req.Languages,
 		"search_type":  req.SearchType,
 		"sort":         req.Sort,
 		"sort_type":    req.SortType,

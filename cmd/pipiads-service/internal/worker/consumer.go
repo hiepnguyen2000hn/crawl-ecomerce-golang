@@ -14,13 +14,17 @@ import (
 )
 
 type JobMessage struct {
-	JobID       string `json:"job_id"`
-	Keyword     string `json:"keyword"`
-	SearchType  int    `json:"search_type,omitempty"`
-	Sort        int    `json:"sort,omitempty"`
-	SortType    string `json:"sort_type,omitempty"`
-	CurrentPage int    `json:"current_page,omitempty"`
-	PageSize    int    `json:"page_size,omitempty"`
+	JobID       string   `json:"job_id"`
+	Keyword     string   `json:"keyword"`
+	Country     string   `json:"country,omitempty"`
+	Countries   []string `json:"countries,omitempty"`
+	Language    string   `json:"language,omitempty"`
+	Languages   []string `json:"languages,omitempty"`
+	SearchType  int      `json:"search_type,omitempty"`
+	Sort        int      `json:"sort,omitempty"`
+	SortType    string   `json:"sort_type,omitempty"`
+	CurrentPage int      `json:"current_page,omitempty"`
+	PageSize    int      `json:"page_size,omitempty"`
 }
 
 type CompletedMessage struct {
@@ -61,6 +65,10 @@ func (c *Consumer) HandleMessage(body []byte) error {
 
 		searchReq := pipiads.SearchRequest{
 			Keyword:     msg.Keyword,
+			Country:     msg.Country,
+			Countries:   msg.Countries,
+			Language:    msg.Language,
+			Languages:   msg.Languages,
 			SearchType:  msg.SearchType,
 			Sort:        msg.Sort,
 			SortType:    msg.SortType,

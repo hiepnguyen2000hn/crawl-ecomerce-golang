@@ -51,6 +51,10 @@ type MemberUsage struct {
 type SearchRequest struct {
 	Keyword        string                 `json:"search,omitempty"`
 	ExtendKeywords []ExtendKeywordRequest `json:"extend_keywords,omitempty"`
+	Country        string                 `json:"country,omitempty"`  // ISO code (e.g., "US", "VN")
+	Countries      []string               `json:"countries,omitempty"` // Multiple regions
+	Language       string                 `json:"language,omitempty"` // e.g., "en", "vi"
+	Languages      []string               `json:"languages,omitempty"`
 	SearchType     int                    `json:"search_type"`  // default 1
 	Sort           int                    `json:"sort"`         // default 999 (Default) or 2 (Hot)
 	SortType       string                 `json:"sort_type"`    // default "desc"
@@ -257,11 +261,23 @@ func (c *HTTPClient) SearchEcommerceAds(ctx context.Context, account *Account, r
 		}
 	}
 
+	regions := req.Countries
+	if len(regions) == 0 && req.Country != "" {
+		regions = []string{req.Country}
+	}
+
+	languages := req.Languages
+	if len(languages) == 0 && req.Language != "" {
+		languages = []string{req.Language}
+	}
+
 	type searchPayload struct {
 		IsParticiple   bool                   `json:"is_participle"`
 		SearchType     int                    `json:"search_type"`
 		Search         string                 `json:"search,omitempty"`
 		ExtendKeywords []ExtendKeywordRequest `json:"extend_keywords,omitempty"`
+		Region         []string               `json:"region,omitempty"`
+		Language       []string               `json:"language,omitempty"`
 		Sort           int                    `json:"sort"`
 		SortType       string                 `json:"sort_type"`
 		CurrentPage    int                    `json:"current_page"`
@@ -273,6 +289,8 @@ func (c *HTTPClient) SearchEcommerceAds(ctx context.Context, account *Account, r
 		SearchType:     req.SearchType,
 		Search:         req.Keyword,
 		ExtendKeywords: extendKeywords,
+		Region:         regions,
+		Language:       languages,
 		Sort:           req.Sort,
 		SortType:       req.SortType,
 		CurrentPage:    req.CurrentPage,

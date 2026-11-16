@@ -15,6 +15,8 @@ import (
 
 func main() {
 	keyword := flag.String("keyword", "car xiaomi", "Keyword to search ads on PiPiAds")
+	country := flag.String("country", "", "Filter by country code (e.g. US, VN, PH)")
+	language := flag.String("lang", "", "Filter by language code (e.g. en, vi, zh)")
 	limit := flag.Int("limit", 5, "Number of ads to display")
 	flag.Parse()
 
@@ -48,6 +50,8 @@ func main() {
 
 	ads, err := client.SearchEcommerceAds(ctx, account, pipiads.SearchRequest{
 		Keyword:     *keyword,
+		Country:     *country,
+		Language:    *language,
 		CurrentPage: 1,
 		PageSize:    *limit,
 	})

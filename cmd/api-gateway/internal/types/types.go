@@ -101,12 +101,16 @@ type CreateLinkedInJobResponse struct {
 }
 
 type CreatePipiadsJobRequest struct {
-	Keyword     string `json:"keyword"`
-	SearchType  int    `json:"search_type,optional"`
-	Sort        int    `json:"sort,optional"`
-	SortType    string `json:"sort_type,optional"`
-	CurrentPage int    `json:"current_page,optional"`
-	PageSize    int    `json:"page_size,optional"`
+	Keyword     string   `json:"keyword"`
+	Country     string   `json:"country,optional"`
+	Countries   []string `json:"countries,optional"`
+	Language    string   `json:"language,optional"`
+	Languages   []string `json:"languages,optional"`
+	SearchType  int      `json:"search_type,optional"`
+	Sort        int      `json:"sort,optional"`
+	SortType    string   `json:"sort_type,optional"`
+	CurrentPage int      `json:"current_page,optional"`
+	PageSize    int      `json:"page_size,optional"`
 }
 
 type CreatePipiadsJobResponse struct {
