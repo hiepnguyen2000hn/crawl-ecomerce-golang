@@ -274,6 +274,8 @@ services:
     build:
       context: .
       dockerfile: cmd/pipiads-service/Dockerfile
+    volumes:
+      - ${PIPIADS_ACCOUNTS_FILE:-./pipiads_accounts.json}:/etc/pipiads-service/pipiads_accounts.json:ro
     depends_on:
       postgres:
         condition: service_healthy
