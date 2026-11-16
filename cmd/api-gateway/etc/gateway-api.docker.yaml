@@ -24,3 +24,5 @@ LinkedInRpc:
   Target: linkedin-service:8092
 KalodataRpc:
   Target: kalodata-service:8093
+PipiadsRpc:
+  Target: pipiads-service:8094

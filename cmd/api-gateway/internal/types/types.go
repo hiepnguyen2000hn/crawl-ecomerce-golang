@@ -3,7 +3,19 @@
 
 package types
 
-import "encoding/json"
+type CreateAllegroJobRequest struct {
+	Keyword      string   `json:"keyword,optional"`
+	Url          string   `json:"url,optional"`
+	Urls         []string `json:"urls,optional"`
+	Pages        int      `json:"pages,optional"`
+	MaxItems     int      `json:"max_items,optional"`
+	WithComments *bool    `json:"with_comments,optional"`
+	MaxComments  int      `json:"max_comments,optional"`
+}
+
+type CreateAllegroJobResponse struct {
+	JobId string `json:"job_id"`
+}
 
 type CreateAmazonJobRequest struct {
 	Keyword  string   `json:"keyword,optional"`
@@ -45,6 +57,62 @@ type CreateFbAdsJobResponse struct {
 	JobId string `json:"job_id"`
 }
 
+type CreateKalodataJobRequest struct {
+	Keyword          string `json:"keyword,optional"`
+	Country          string `json:"country,optional"`
+	StartDate        string `json:"start_date,optional"`
+	EndDate          string `json:"end_date,optional"`
+	PageNo           int    `json:"page_no,optional"`
+	PageSize         int    `json:"page_size,optional"`
+	SortField        string `json:"sort_field,optional"`
+	SortType         string `json:"sort_type,optional"`
+	CategoryIds      []int  `json:"category_ids,optional"`
+	Revenue          string `json:"revenue,optional"`
+	UnitPrice        string `json:"unit_price,optional"`
+	SalesChannel     string `json:"sales_channel,optional"`
+	CommissionRate   string `json:"commission_rate,optional"`
+	Creator          string `json:"creator,optional"`
+	WithProducts     *bool  `json:"with_products,optional"`
+	WithVideos       *bool  `json:"with_videos,optional"`
+	WithVideoDetail  bool   `json:"with_video_detail,optional"`
+	VideoType        string `json:"video_type,optional"`
+	Duration         string `json:"duration,optional"`
+	CreatorFollowers string `json:"creator_followers,optional"`
+}
+
+type CreateKalodataJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
+type CreateLinkedInJobRequest struct {
+	Keyword          string   `json:"keyword"`
+	MaxPosts         int      `json:"max_posts,optional"`
+	Pages            int      `json:"pages,optional"`
+	SortBy           string   `json:"sort_by,optional"`
+	PostedLimit      string   `json:"posted_limit,optional"`
+	AuthorUrls       []string `json:"author_urls,optional"`
+	AuthorsCompanies []string `json:"authors_companies,optional"`
+	AuthorKeywords   string   `json:"author_keywords,optional"`
+	ContentType      string   `json:"content_type,optional"`
+}
+
+type CreateLinkedInJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
+type CreatePipiadsJobRequest struct {
+	Keyword     string `json:"keyword"`
+	SearchType  int    `json:"search_type,optional"`
+	Sort        int    `json:"sort,optional"`
+	SortType    string `json:"sort_type,optional"`
+	CurrentPage int    `json:"current_page,optional"`
+	PageSize    int    `json:"page_size,optional"`
+}
+
+type CreatePipiadsJobResponse struct {
+	JobId string `json:"job_id"`
+}
+
 type CreateRedditApiJobRequest struct {
 	Keyword string `json:"keyword"`
 }
@@ -68,6 +136,16 @@ type CreateTrendJobRequest struct {
 
 type CreateTrendJobResponse struct {
 	JobId string `json:"job_id"`
+}
+
+type GetAllegroJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetAllegroJobResponse struct {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	AiOutput     string `json:"ai_output"`
 }
 
 type GetAmazonJobRequest struct {
@@ -97,6 +175,45 @@ type GetFbAdsJobRequest struct {
 type GetFbAdsJobResponse struct {
 	Status   string `json:"status"`
 	AdCount  int32  `json:"ad_count"`
+	AiOutput string `json:"ai_output"`
+}
+
+type GetKalodataJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetKalodataJobResponse struct {
+	Status       string `json:"status"`
+	ProductCount int32  `json:"product_count"`
+	VideoCount   int32  `json:"video_count"`
+	AiOutput     string `json:"ai_output"`
+}
+
+type GetLinkedInJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetLinkedInJobResponse struct {
+	Status    string `json:"status"`
+	PostCount int32  `json:"post_count"`
+	AiOutput  string `json:"ai_output"`
+}
+
+type GetLinkedInPostsRequest struct {
+	Id string `path:"id"`
+}
+
+type GetLinkedInPostsResponse struct {
+	Posts []LinkedInPostItem `json:"posts"`
+}
+
+type GetPipiadsJobRequest struct {
+	Id string `path:"id"`
+}
+
+type GetPipiadsJobResponse struct {
+	Status   string `json:"status"`
+	AdsCount int32  `json:"ads_count"`
 	AiOutput string `json:"ai_output"`
 }
 
@@ -132,111 +249,15 @@ type GetTrendJobResponse struct {
 	AiOutput string `json:"ai_output"`
 }
 
-type CreateAllegroJobRequest struct {
-	Keyword      string   `json:"keyword,optional"`
-	Url          string   `json:"url,optional"`
-	Urls         []string `json:"urls,optional"`
-	Pages        int      `json:"pages,optional"`
-	MaxItems     int      `json:"max_items,optional"`
-	WithComments *bool    `json:"with_comments,optional"`
-	MaxComments  int      `json:"max_comments,optional"`
-}
-
-type CreateAllegroJobResponse struct {
-	JobId string `json:"job_id"`
-}
-
-type GetAllegroJobRequest struct {
-	Id string `path:"id"`
-}
-
-type GetAllegroJobResponse struct {
-	Status       string `json:"status"`
-	ProductCount int32  `json:"product_count"`
-	AiOutput     string `json:"ai_output"`
-}
-
-type CreateLinkedInJobRequest struct {
-	Keyword          string   `json:"keyword"`
-	MaxPosts         int      `json:"max_posts,optional"`
-	Pages            int      `json:"pages,optional"`
-	SortBy           string   `json:"sort_by,optional"`
-	PostedLimit      string   `json:"posted_limit,optional"`
-	AuthorUrls       []string `json:"author_urls,optional"`
-	AuthorsCompanies []string `json:"authors_companies,optional"`
-	AuthorKeywords   string   `json:"author_keywords,optional"`
-	ContentType      string   `json:"content_type,optional"`
-}
-
-type CreateLinkedInJobResponse struct {
-	JobId string `json:"job_id"`
-}
-
-type GetLinkedInJobRequest struct {
-	Id string `path:"id"`
-}
-
-type GetLinkedInJobResponse struct {
-	Status    string `json:"status"`
-	PostCount int32  `json:"post_count"`
-	AiOutput  string `json:"ai_output"`
-}
-
-type CreateKalodataJobRequest struct {
-	Keyword          string `json:"keyword,optional"`
-	Country          string `json:"country,optional"`
-	StartDate        string `json:"start_date,optional"`
-	EndDate          string `json:"end_date,optional"`
-	PageNo           int    `json:"page_no,optional"`
-	PageSize         int    `json:"page_size,optional"`
-	SortField        string `json:"sort_field,optional"`
-	SortType         string `json:"sort_type,optional"`
-	CategoryIds      []int  `json:"category_ids,optional"`
-	Revenue          string `json:"revenue,optional"`
-	UnitPrice        string `json:"unit_price,optional"`
-	SalesChannel     string `json:"sales_channel,optional"`
-	CommissionRate   string `json:"commission_rate,optional"`
-	Creator          string `json:"creator,optional"`
-	WithProducts     *bool  `json:"with_products,optional"`
-	WithVideos       *bool  `json:"with_videos,optional"`
-	WithVideoDetail  bool   `json:"with_video_detail,optional"`
-	VideoType        string `json:"video_type,optional"`
-	Duration         string `json:"duration,optional"`
-	CreatorFollowers string `json:"creator_followers,optional"`
-}
-
-type CreateKalodataJobResponse struct {
-	JobId string `json:"job_id"`
-}
-
-type GetKalodataJobRequest struct {
-	Id string `path:"id"`
-}
-
-type GetKalodataJobResponse struct {
-	Status       string `json:"status"`
-	ProductCount int32  `json:"product_count"`
-	VideoCount   int32  `json:"video_count"`
-	AiOutput     string `json:"ai_output"`
-}
-
-type GetLinkedInPostsRequest struct {
-	Id string `path:"id"`
-}
-
 type LinkedInPostItem struct {
-	PostId        string          `json:"post_id"`
-	Url           string          `json:"url"`
-	Content       string          `json:"content"`
-	AuthorName    string          `json:"author_name"`
-	AuthorUrl     string          `json:"author_url"`
-	PostedAt      string          `json:"posted_at"`
-	Likes         int32           `json:"likes"`
-	CommentsCount int32           `json:"comments_count"`
-	Shares        int32           `json:"shares"`
-	Raw           json.RawMessage `json:"raw"`
-}
-
-type GetLinkedInPostsResponse struct {
-	Posts []LinkedInPostItem `json:"posts"`
+	PostId        string `json:"post_id"`
+	Url           string `json:"url"`
+	Content       string `json:"content"`
+	AuthorName    string `json:"author_name"`
+	AuthorUrl     string `json:"author_url"`
+	PostedAt      string `json:"posted_at"`
+	Likes         int32  `json:"likes"`
+	CommentsCount int32  `json:"comments_count"`
+	Shares        int32  `json:"shares"`
+	Raw           string `json:"raw"`
 }

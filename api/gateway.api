@@ -215,6 +215,29 @@ type GetKalodataJobResponse {
 	AiOutput     string `json:"ai_output"`
 }
 
+type CreatePipiadsJobRequest {
+	Keyword     string `json:"keyword"`
+	SearchType  int    `json:"search_type,optional"`
+	Sort        int    `json:"sort,optional"`
+	SortType    string `json:"sort_type,optional"`
+	CurrentPage int    `json:"current_page,optional"`
+	PageSize    int    `json:"page_size,optional"`
+}
+
+type CreatePipiadsJobResponse {
+	JobId string `json:"job_id"`
+}
+
+type GetPipiadsJobRequest {
+	Id string `path:"id"`
+}
+
+type GetPipiadsJobResponse {
+	Status   string `json:"status"`
+	AdsCount int32  `json:"ads_count"`
+	AiOutput string `json:"ai_output"`
+}
+
 type GetLinkedInPostsRequest {
 	Id string `path:"id"`
 }
@@ -293,5 +316,11 @@ service gateway-api {
 
 	@handler GetKalodataJob
 	get /jobs/kalodata/:id (GetKalodataJobRequest) returns (GetKalodataJobResponse)
+
+	@handler CreatePipiadsJob
+	post /jobs/pipiads (CreatePipiadsJobRequest) returns (CreatePipiadsJobResponse)
+
+	@handler GetPipiadsJob
+	get /jobs/pipiads/:id (GetPipiadsJobRequest) returns (GetPipiadsJobResponse)
 }
 

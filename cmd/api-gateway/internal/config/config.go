@@ -41,4 +41,7 @@ type Config struct {
 	KalodataRpc struct {
 		Target string `json:",default=127.0.0.1:8093"`
 	}
+	PipiadsRpc struct {
+		Target string `json:",default=127.0.0.1:8094"`
+	}
 }

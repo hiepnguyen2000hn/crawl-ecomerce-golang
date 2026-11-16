@@ -47,7 +47,7 @@ func (l *GetLinkedInPostsLogic) GetLinkedInPosts(req *types.GetLinkedInPostsRequ
 			Likes:         p.Likes,
 			CommentsCount: p.CommentsCount,
 			Shares:        p.Shares,
-			Raw:           raw,
+			Raw:           string(raw),
 		})
 	}
 	return out, nil

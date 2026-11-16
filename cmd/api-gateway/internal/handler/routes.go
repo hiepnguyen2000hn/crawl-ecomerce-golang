@@ -16,6 +16,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		[]rest.Route{
 			{
 				Method:  http.MethodPost,
+				Path:    "/jobs/allegro",
+				Handler: CreateAllegroJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/allegro/:id",
+				Handler: GetAllegroJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
 				Path:    "/jobs/amazon",
 				Handler: CreateAmazonJobHandler(serverCtx),
 			},
@@ -46,6 +56,41 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodPost,
+				Path:    "/jobs/kalodata",
+				Handler: CreateKalodataJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/kalodata/:id",
+				Handler: GetKalodataJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/jobs/linkedin",
+				Handler: CreateLinkedInJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/linkedin/:id",
+				Handler: GetLinkedInJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/linkedin/:id/posts",
+				Handler: GetLinkedInPostsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/jobs/pipiads",
+				Handler: CreatePipiadsJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/jobs/pipiads/:id",
+				Handler: GetPipiadsJobHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
 				Path:    "/jobs/reddit",
 				Handler: CreateRedditJobHandler(serverCtx),
 			},
@@ -73,41 +118,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/jobs/trend/:id",
 				Handler: GetTrendJobHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/jobs/allegro",
-				Handler: CreateAllegroJobHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/jobs/allegro/:id",
-				Handler: GetAllegroJobHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/jobs/linkedin",
-				Handler: CreateLinkedInJobHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/jobs/linkedin/:id",
-				Handler: GetLinkedInJobHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/jobs/linkedin/:id/posts",
-				Handler: GetLinkedInPostsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/jobs/kalodata",
-				Handler: CreateKalodataJobHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/jobs/kalodata/:id",
-				Handler: GetKalodataJobHandler(serverCtx),
 			},
 		},
 	)

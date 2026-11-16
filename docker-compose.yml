@@ -270,6 +270,19 @@ services:
         condition: service_completed_successfully
     restart: on-failure:5
 
+  pipiads-service:
+    build:
+      context: .
+      dockerfile: cmd/pipiads-service/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure:5
+
   api-gateway:
     build:
       context: .
@@ -296,6 +309,8 @@ services:
       linkedin-service:
         condition: service_started
       kalodata-service:
+        condition: service_started
+      pipiads-service:
         condition: service_started
       migrate:
         condition: service_completed_successfully

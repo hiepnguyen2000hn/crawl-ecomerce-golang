@@ -1,0 +1,12 @@
+Name: pipiads-service
+ListenOn: 0.0.0.0:8094
+Postgres:
+  DSN: postgres://crawl:crawl@postgres:5432/crawl?sslmode=disable
+RabbitMQ:
+  URL: amqp://guest:guest@rabbitmq:5672/
+  Exchange: crawl
+  Concurrency: 5
+Pipiads:
+  BaseURL: https://www.pipiads.com
+  AccountsFile: /etc/pipiads-service/pipiads_accounts.json
+  Retries: 3
