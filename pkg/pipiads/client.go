@@ -70,17 +70,26 @@ type EcommerceAd struct {
 	Description    string          `json:"desc"`
 	AppName        string          `json:"app_name"`
 	AdvertiserName string          `json:"advertiser_name"`
+	UniqueID       string          `json:"unique_id"`
+	AppImage       string          `json:"app_image"`
 	Platform       int             `json:"platform"`
 	PlayCount      int64           `json:"play_count"`
 	DiggCount      int64           `json:"digg_count"`
 	CommentCount   int64           `json:"comment_count"`
 	ShareCount     int64           `json:"share_count"`
+	Duration       int             `json:"duration"`
+	VideoURL       string          `json:"video_url"`
 	CoverURL       string          `json:"cover"`
 	ImageURL       string          `json:"image"`
 	LandingPageURL string          `json:"landing_page_url"`
-	FirstTime      int64           `json:"first_time"`
+	ButtonText     string          `json:"button_text"`
+	FirstTime      int64           `json:"ad_create_time"`
 	LastTime       int64           `json:"last_put_time"`
 	PutDays        int             `json:"put_days"`
+	FetchRegion    []string        `json:"fetch_region"`
+	Script         string          `json:"ai_analysis_script"`
+	MainHook       string          `json:"ai_analysis_main_hook"`
+	Tags           []string        `json:"ai_analysis_tags"`
 	Raw            json.RawMessage `json:"raw"`
 }
 

@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/db"
 	"github.com/hiepnv/crawl-ecomerce-golang/pkg/pipiads"
 )
 
 func main() {
-	keyword := flag.String("keyword", "shoes", "Keyword to search ads on PiPiAds")
+	keyword := flag.String("keyword", "car xiaomi", "Keyword to search ads on PiPiAds")
 	limit := flag.Int("limit", 5, "Number of ads to display")
 	flag.Parse()
 
@@ -31,17 +33,16 @@ func main() {
 	client := pipiads.NewHTTPClient("https://www.pipiads.com")
 	registry := pipiads.NewAccountRegistry(conn, client)
 
-	// Tự động acquire account khả dụng và có quota
 	account, err := registry.AcquireAccount(ctx)
 	if err != nil {
 		log.Fatalf("Lỗi lấy account PiPiAds khả dụng: %v", err)
 	}
 
-	fmt.Printf("\n======================================================\n")
+	fmt.Printf("\n========================================================================================\n")
 	fmt.Printf("👉 Sử dụng Account: %s\n", account.Email)
-	fmt.Printf("👉 Device ID: %s | Proxy: %s\n", account.DeviceID, account.Proxy)
+	fmt.Printf("👉 Proxy: %s\n", account.Proxy)
 	fmt.Printf("👉 Credit trước khi search: %d/%d (Còn lại: %d)\n", account.UsedCredits, account.TotalCredits, account.TotalCredits-account.UsedCredits)
-	fmt.Printf("======================================================\n\n")
+	fmt.Printf("========================================================================================\n\n")
 
 	fmt.Printf("🔎 Đang tìm kiếm quảng cáo theo keyword: '%s'...\n\n", *keyword)
 
@@ -54,19 +55,15 @@ func main() {
 		log.Fatalf("Tìm kiếm thất bại: %v", err)
 	}
 
-	// Cập nhật lại số credits thực tế sau khi search
 	_ = registry.SyncAccountQuota(ctx, account)
 
-	fmt.Printf("✅ TÌM THẤY %d SẢN PHẨM/QUẢNG CÁO:\n", len(ads))
-	fmt.Println("-------------------------------------------------------------------------------------------------------")
+	fmt.Printf("✅ TÌM THẤY %d SẢN PHẨM / QUẢNG CÁO (EXTRACT TOÀN DIỆN):\n", len(ads))
+	fmt.Println("========================================================================================")
 
 	for i, ad := range ads {
-		desc := ad.Description
-		if len(desc) > 80 {
-			desc = desc[:77] + "..."
-		}
+		desc := strings.TrimSpace(ad.Description)
 		if desc == "" {
-			desc = "(Không có mô tả text)"
+			desc = "(Không có text mô tả)"
 		}
 
 		brand := ad.AdvertiserName
@@ -77,17 +74,47 @@ func main() {
 			brand = "(N/A)"
 		}
 
-		fmt.Printf("[%d] Video ID: %s | Ad ID: %s\n", i+1, ad.VideoID, ad.AdID)
-		fmt.Printf("    🏷️  Thương hiệu/Shop: %s\n", brand)
-		fmt.Printf("    📊 Thống kê: %d Lượt xem | %d Lượt thích | %d Bình luận | %d Chia sẻ\n", ad.PlayCount, ad.DiggCount, ad.CommentCount, ad.ShareCount)
-		fmt.Printf("    📝 Mô tả: %s\n", desc)
-		if ad.CoverURL != "" {
-			fmt.Printf("    🖼️  Ảnh/Cover: %s\n", ad.CoverURL)
+		fmt.Printf("\n[%d] VIDEO ID: %s | AD ID: %s\n", i+1, ad.VideoID, ad.AdID)
+		fmt.Printf("    🏢 Nhà chạy Ads (Thương hiệu/Shop): %s (Handle: @%s)\n", brand, ad.UniqueID)
+		fmt.Printf("    ⏱️  Thời lượng video: %d giây (%02d:%02d)\n", ad.Duration, ad.Duration/60, ad.Duration%60)
+		fmt.Printf("    📊 Thống kê tiếp cận:\n")
+		fmt.Printf("       • Lượt xem (Hiển thị): %d\n", ad.PlayCount)
+		fmt.Printf("       • Lượt thích (Thả tim): %d\n", ad.DiggCount)
+		fmt.Printf("       • Lượt bình luận: %d\n", ad.CommentCount)
+		fmt.Printf("       • Lượt chia sẻ: %d\n", ad.ShareCount)
+
+		if ad.FirstTime > 0 || ad.LastTime > 0 {
+			firstStr := time.Unix(ad.FirstTime, 0).Format("2006-01-02")
+			lastStr := time.Unix(ad.LastTime, 0).Format("2006-01-02")
+			fmt.Printf("    📅 Thời gian chạy: Từ %s đến %s (Đã chạy %d ngày)\n", firstStr, lastStr, ad.PutDays)
+		}
+
+		if len(ad.FetchRegion) > 0 {
+			fmt.Printf("    🌍 Quốc gia mục tiêu: %s\n", strings.Join(ad.FetchRegion, ", "))
+		}
+
+		fmt.Printf("    🎥 Link tải Video MP4: %s\n", ad.VideoURL)
+		fmt.Printf("    🖼️  Ảnh bìa (Cover URL): %s\n", ad.CoverURL)
+
+		if ad.ButtonText != "" {
+			fmt.Printf("    🔘 Nút CTA: [%s]\n", ad.ButtonText)
 		}
 		if ad.LandingPageURL != "" {
-			fmt.Printf("    🔗 Landing Page: %s\n", ad.LandingPageURL)
+			fmt.Printf("    🔗 Landing Page (Trang đích): %s\n", ad.LandingPageURL)
 		}
-		fmt.Println("-------------------------------------------------------------------------------------------------------")
+
+		if ad.Script != "" && ad.Script != "null" {
+			fmt.Printf("    🎙️ Kịch bản / Lời thoại AI trích xuất: %s\n", ad.Script)
+		}
+		if ad.MainHook != "" && ad.MainHook != "null" {
+			fmt.Printf("    🪝 Hook chính mở đầu: %s\n", ad.MainHook)
+		}
+		if len(ad.Tags) > 0 {
+			fmt.Printf("    🏷️  Hashtags: %s\n", strings.Join(ad.Tags, " "))
+		}
+
+		fmt.Printf("    📝 Mô tả caption: %s\n", desc)
+		fmt.Println("----------------------------------------------------------------------------------------")
 	}
 
 	fmt.Printf("\n💰 Credit còn lại sau khi search: %d/%d (Còn lại: %d)\n\n", account.UsedCredits, account.TotalCredits, account.TotalCredits-account.UsedCredits)

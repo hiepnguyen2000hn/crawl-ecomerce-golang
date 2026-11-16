@@ -127,10 +127,14 @@ func (c *Consumer) HandleMessage(body []byte) error {
 		defer stmt.Close()
 
 		for _, ad := range ads {
+			brand := ad.AdvertiserName
+			if brand == "" {
+				brand = ad.AppName
+			}
 			_, _ = stmt.ExecContext(ctx,
-				msg.JobID, ad.VideoID, ad.AdID, msg.Keyword, ad.Title, ad.Description, ad.AppName, ad.AdvertiserName,
+				msg.JobID, ad.VideoID, ad.AdID, msg.Keyword, ad.Title, ad.Description, ad.AppName, brand,
 				ad.Platform, ad.PlayCount, ad.DiggCount, ad.CommentCount, ad.ShareCount,
-				ad.CoverURL, "", ad.LandingPageURL, ad.FirstTime, ad.LastTime, ad.Raw,
+				ad.CoverURL, ad.VideoURL, ad.LandingPageURL, ad.FirstTime, ad.LastTime, ad.Raw,
 			)
 		}
 
